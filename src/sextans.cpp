@@ -240,69 +240,6 @@ void PEcore(
             local_C_pe0_d6_d7
             );
         
-        
-        /*
-        ap_uint<64> c_val_d0_d1_u64 = local_C_pe0_d0_d1[addr_c];
-        ap_uint<64> c_val_d2_d3_u64 = local_C_pe0_d2_d3[addr_c];
-        ap_uint<64> c_val_d4_d5_u64 = local_C_pe0_d4_d5[addr_c];
-        ap_uint<64> c_val_d6_d7_u64 = local_C_pe0_d6_d7[addr_c];
-
-        ap_uint<32> c_val_d0_u = c_val_d0_d1_u64(31,  0);
-        ap_uint<32> c_val_d1_u = c_val_d0_d1_u64(63, 32);
-        ap_uint<32> c_val_d2_u = c_val_d2_d3_u64(31,  0);
-        ap_uint<32> c_val_d3_u = c_val_d2_d3_u64(63, 32);
-        ap_uint<32> c_val_d4_u = c_val_d4_d5_u64(31,  0);
-        ap_uint<32> c_val_d5_u = c_val_d4_d5_u64(63, 32);
-        ap_uint<32> c_val_d6_u = c_val_d6_d7_u64(31,  0);
-        ap_uint<32> c_val_d7_u = c_val_d6_d7_u64(63, 32);
-
-        float c_val_d0_f = uint32_to_float(c_val_d0_u);
-        float c_val_d1_f = uint32_to_float(c_val_d1_u);
-        
-        float c_val_d2_f = uint32_to_float(c_val_d2_u);
-        float c_val_d3_f = uint32_to_float(c_val_d3_u);
-        float c_val_d4_f = uint32_to_float(c_val_d4_u);
-        float c_val_d5_f = uint32_to_float(c_val_d5_u);
-        float c_val_d6_f = uint32_to_float(c_val_d6_u);
-        float c_val_d7_f = uint32_to_float(c_val_d7_u);
-        
-        
-
-		c_val_d0_f += HLS_REG(a_val_f) * b_val_d0_f;
-		c_val_d1_f += HLS_REG(a_val_f) * b_val_d1_f;
-        
-		c_val_d2_f += HLS_REG(a_val_f) * b_val_d2_f;
-		c_val_d3_f += HLS_REG(a_val_f) * b_val_d3_f;
-		c_val_d4_f += HLS_REG(a_val_f) * b_val_d4_f;
-		c_val_d5_f += HLS_REG(a_val_f) * b_val_d5_f;
-		c_val_d6_f += HLS_REG(a_val_f) * b_val_d6_f;
-		c_val_d7_f += HLS_REG(a_val_f) * b_val_d7_f;
-
-		c_val_d0_u = float_to_uint32(c_val_d0_f);
-		c_val_d1_u = float_to_uint32(c_val_d1_f);
-        
-		c_val_d2_u = float_to_uint32(c_val_d2_f);
-		c_val_d3_u = float_to_uint32(c_val_d3_f);
-		c_val_d4_u = float_to_uint32(c_val_d4_f);
-		c_val_d5_u = float_to_uint32(c_val_d5_f);
-		c_val_d6_u = float_to_uint32(c_val_d6_f);
-		c_val_d7_u = float_to_uint32(c_val_d7_f);
-
-		c_val_d0_d1_u64(31,  0) = c_val_d0_u;
-		c_val_d0_d1_u64(63, 32) = c_val_d1_u;
-        
-		c_val_d2_d3_u64(31,  0) = c_val_d2_u;
-		c_val_d2_d3_u64(63, 32) = c_val_d3_u;
-		c_val_d4_d5_u64(31,  0) = c_val_d4_u;
-		c_val_d4_d5_u64(63, 32) = c_val_d5_u;
-		c_val_d6_d7_u64(31,  0) = c_val_d6_u;
-		c_val_d6_d7_u64(63, 32) = c_val_d7_u;
-
-		local_C_pe0_d0_d1[addr_c] = c_val_d0_d1_u64;
-		local_C_pe0_d2_d3[addr_c] = c_val_d2_d3_u64;
-		local_C_pe0_d4_d5[addr_c] = c_val_d4_d5_u64;
-		local_C_pe0_d6_d7[addr_c] = c_val_d6_d7_u64;
-        */
 	}
 }
 
