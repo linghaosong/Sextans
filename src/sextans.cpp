@@ -188,25 +188,25 @@ void PEcore(
 	) {
 #pragma HLS inline
 	if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
-		float a_val_f = uint32_to_float(a_val_u);
-
-		ap_uint<32> b_val_d0_u = local_B_pe0_pe1_d0[addr_b];
-		ap_uint<32> b_val_d1_u = local_B_pe0_pe1_d1[addr_b];
-		ap_uint<32> b_val_d2_u = local_B_pe0_pe1_d2[addr_b];
-		ap_uint<32> b_val_d3_u = local_B_pe0_pe1_d3[addr_b];
-		ap_uint<32> b_val_d4_u = local_B_pe0_pe1_d4[addr_b];
-		ap_uint<32> b_val_d5_u = local_B_pe0_pe1_d5[addr_b];
-		ap_uint<32> b_val_d6_u = local_B_pe0_pe1_d6[addr_b];
-		ap_uint<32> b_val_d7_u = local_B_pe0_pe1_d7[addr_b];
-
-		float b_val_d0_f = uint32_to_float(b_val_d0_u);
-		float b_val_d1_f = uint32_to_float(b_val_d1_u);
-		float b_val_d2_f = uint32_to_float(b_val_d2_u);
-		float b_val_d3_f = uint32_to_float(b_val_d3_u);
-		float b_val_d4_f = uint32_to_float(b_val_d4_u);
-		float b_val_d5_f = uint32_to_float(b_val_d5_u);
-		float b_val_d6_f = uint32_to_float(b_val_d6_u);
-		float b_val_d7_f = uint32_to_float(b_val_d7_u);
+        float a_val_f = uint32_to_float(a_val_u);
+        
+        ap_uint<32> b_val_d0_u = local_B_pe0_pe1_d0[addr_b];
+        ap_uint<32> b_val_d1_u = local_B_pe0_pe1_d1[addr_b];
+        ap_uint<32> b_val_d2_u = local_B_pe0_pe1_d2[addr_b];
+        ap_uint<32> b_val_d3_u = local_B_pe0_pe1_d3[addr_b];
+        ap_uint<32> b_val_d4_u = local_B_pe0_pe1_d4[addr_b];
+        ap_uint<32> b_val_d5_u = local_B_pe0_pe1_d5[addr_b];
+        ap_uint<32> b_val_d6_u = local_B_pe0_pe1_d6[addr_b];
+        ap_uint<32> b_val_d7_u = local_B_pe0_pe1_d7[addr_b];
+        
+        float b_val_d0_f = uint32_to_float(b_val_d0_u);
+        float b_val_d1_f = uint32_to_float(b_val_d1_u);
+        float b_val_d2_f = uint32_to_float(b_val_d2_u);
+        float b_val_d3_f = uint32_to_float(b_val_d3_u);
+        float b_val_d4_f = uint32_to_float(b_val_d4_u);
+        float b_val_d5_f = uint32_to_float(b_val_d5_u);
+        float b_val_d6_f = uint32_to_float(b_val_d6_u);
+        float b_val_d7_f = uint32_to_float(b_val_d7_u);
         
         PU2core<0>(
             addr_c,
@@ -239,9 +239,9 @@ void PEcore(
             b_val_d7_f,
             local_C_pe0_d6_d7
             );
-        
 	}
 }
+
 
 void peg16mult(
 	ap_uint<512> opa512,
