@@ -168,26 +168,26 @@ void PU2core(
 
 template <int ch>
 void PEcore(
-	ap_uint<14> & addr_b,
-	ap_uint<18> & addr_c,
-	ap_uint<32> & a_val_u,
+    ap_uint<14> & addr_b,
+    ap_uint<18> & addr_c,
+    ap_uint<32> & a_val_u,
 
-	ap_uint<64> * local_C_pe0_d0_d1,
-	ap_uint<64> * local_C_pe0_d2_d3,
-	ap_uint<64> * local_C_pe0_d4_d5,
-	ap_uint<64> * local_C_pe0_d6_d7,
+    ap_uint<64> * local_C_pe0_d0_d1,
+    ap_uint<64> * local_C_pe0_d2_d3,
+    ap_uint<64> * local_C_pe0_d4_d5,
+    ap_uint<64> * local_C_pe0_d6_d7,
 
-	ap_uint<32> * local_B_pe0_pe1_d0,
-	ap_uint<32> * local_B_pe0_pe1_d1,
-	ap_uint<32> * local_B_pe0_pe1_d2,
-	ap_uint<32> * local_B_pe0_pe1_d3,
-	ap_uint<32> * local_B_pe0_pe1_d4,
-	ap_uint<32> * local_B_pe0_pe1_d5,
-	ap_uint<32> * local_B_pe0_pe1_d6,
-	ap_uint<32> * local_B_pe0_pe1_d7
-	) {
+    ap_uint<32> * local_B_pe0_pe1_d0,
+    ap_uint<32> * local_B_pe0_pe1_d1,
+    ap_uint<32> * local_B_pe0_pe1_d2,
+    ap_uint<32> * local_B_pe0_pe1_d3,
+    ap_uint<32> * local_B_pe0_pe1_d4,
+    ap_uint<32> * local_B_pe0_pe1_d5,
+    ap_uint<32> * local_B_pe0_pe1_d6,
+    ap_uint<32> * local_B_pe0_pe1_d7
+    ) {
 #pragma HLS inline
-	if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
+    if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
         float a_val_f = uint32_to_float(a_val_u);
         
         ap_uint<32> b_val_d0_u = local_B_pe0_pe1_d0[addr_b];
@@ -215,7 +215,7 @@ void PEcore(
             b_val_d1_f,
             local_C_pe0_d0_d1
             );
-        
+	    
         PU2core<1>(
             addr_c,
             a_val_f,
@@ -239,7 +239,7 @@ void PEcore(
             b_val_d7_f,
             local_C_pe0_d6_d7
             );
-	}
+    }
 }
 
 
