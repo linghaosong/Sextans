@@ -5,6 +5,8 @@ Sextans is an accelerator for general-purpose Sparse-Matrix Dense-Matrix Multipl
 + Alveo U280 HBM FPGA
 + Xilinx Vitis 2019.2
 
+To learn more about the techinqual details, please see [this link](https://arxiv.org/abs/2109.11081).
+
 
 If you find this code useful, please cite:
 
