@@ -4,3 +4,13 @@ Sextans is an accelerator for general-purpose Sparse-Matrix Dense-Matrix Multipl
 
 + Alveo U280 HBM FPGA
 + Xilinx Vitis 2019.2
+
+
+If you find this code useful in your research, please cite:
+
+    @misc{sextans2021,
+    Author = {Linghao Song and Yuze Chi and Atefeh Sohrabizadeh and Young-kyu Choi and Jason Lau and Jason Cong},
+    Title = {Sextans: A Streaming Accelerator for General-Purpose Sparse-Matrix Dense-Matrix Multiplication},
+    Year = {2021},
+    Eprint = {arXiv:2109.11081},
+    }
