@@ -6,7 +6,7 @@ Sextans is an accelerator for general-purpose Sparse-Matrix Dense-Matrix Multipl
 + Xilinx Vitis 2019.2
 
 
-If you find this code useful in your research, please cite:
+If you find this code useful, please cite:
 
     @misc{sextans2021,
     Author = {Linghao Song and Yuze Chi and Atefeh Sohrabizadeh and Young-kyu Choi and Jason Lau and Jason Cong},
