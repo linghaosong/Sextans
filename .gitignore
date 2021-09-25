@@ -1,0 +1,5 @@
+/_x.*
+/.Xil
+/*.log
+/build_dir.*
+/host
