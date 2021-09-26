@@ -51,7 +51,7 @@ include $(ABS_COMMON_REPO)/common/includes/xcl2/xcl2.mk
 CXXFLAGS += $(xcl2_CXXFLAGS)
 LDFLAGS += $(xcl2_LDFLAGS)
 HOST_SRCS += $(xcl2_SRCS)
-CXXFLAGS += $(opencl_CXXFLAGS) -Wall -O0 -g -std=c++11
+CXXFLAGS += $(opencl_CXXFLAGS) -Wno-write-strings -O2 -g -std=c++11
 LDFLAGS += $(opencl_LDFLAGS)
 
 HOST_SRCS += src/host.cpp
@@ -70,48 +70,7 @@ ifneq ($(TARGET), hw)
 	CLFLAGS += -g
 endif
 
-#CLFLAGS += --sp sextans_1.m_axi_hbmcsrptr:HBM[0]
-#CLFLAGS += --sp sextans_1.m_axi_hbmcsridx:HBM[0]
-#CLFLAGS += --sp sextans_1.m_axi_hbmcsrval:HBM[0]
-
-CLFLAGS += --sp sextans_1.m_axi_hbm0:HBM[0]
-
-CLFLAGS += --sp sextans_1.m_axi_hbm1:HBM[1]
-CLFLAGS += --sp sextans_1.m_axi_hbm2:HBM[2]
-CLFLAGS += --sp sextans_1.m_axi_hbm3:HBM[3]
-CLFLAGS += --sp sextans_1.m_axi_hbm4:HBM[4]
-
-CLFLAGS += --sp sextans_1.m_axi_hbm5:HBM[5]
-CLFLAGS += --sp sextans_1.m_axi_hbm6:HBM[6]
-CLFLAGS += --sp sextans_1.m_axi_hbm7:HBM[7]
-CLFLAGS += --sp sextans_1.m_axi_hbm8:HBM[8]
-
-CLFLAGS += --sp sextans_1.m_axi_hbm9:HBM[9]
-CLFLAGS += --sp sextans_1.m_axi_hbm10:HBM[10]
-CLFLAGS += --sp sextans_1.m_axi_hbm11:HBM[11]
-CLFLAGS += --sp sextans_1.m_axi_hbm12:HBM[12]
-
-#CLFLAGS += --sp sextans_1.m_axi_hbm13:HBM[13]
-#CLFLAGS += --sp sextans_1.m_axi_hbm14:HBM[14]
-#CLFLAGS += --sp sextans_1.m_axi_hbm15:HBM[15]
-
-CLFLAGS += --sp sextans_1.m_axi_hbm16:HBM[16]
-CLFLAGS += --sp sextans_1.m_axi_hbm17:HBM[17]
-CLFLAGS += --sp sextans_1.m_axi_hbm18:HBM[18]
-CLFLAGS += --sp sextans_1.m_axi_hbm19:HBM[19]
-CLFLAGS += --sp sextans_1.m_axi_hbm20:HBM[20]
-CLFLAGS += --sp sextans_1.m_axi_hbm21:HBM[21]
-CLFLAGS += --sp sextans_1.m_axi_hbm22:HBM[22]
-CLFLAGS += --sp sextans_1.m_axi_hbm23:HBM[23]
-
-CLFLAGS += --sp sextans_1.m_axi_hbm24:HBM[24]
-CLFLAGS += --sp sextans_1.m_axi_hbm25:HBM[25]
-CLFLAGS += --sp sextans_1.m_axi_hbm26:HBM[26]
-CLFLAGS += --sp sextans_1.m_axi_hbm27:HBM[27]
-CLFLAGS += --sp sextans_1.m_axi_hbm28:HBM[28]
-CLFLAGS += --sp sextans_1.m_axi_hbm29:HBM[29]
-CLFLAGS += --sp sextans_1.m_axi_hbm30:HBM[30]
-CLFLAGS += --sp sextans_1.m_axi_hbm31:HBM[31]
+CLFLAGS += --config link_config.ini
 
 CLFLAGS += --report_level 2
 
@@ -137,14 +96,14 @@ build: $(BINARY_CONTAINERS)
 # Building kernel
 $(TEMP_DIR)/sextans.xo: src/sextans.cpp
 	mkdir -p $(TEMP_DIR)
-	$(VPP) $(CLFLAGS) --temp_dir $(TEMP_DIR) -c -k sextans -I'$(<D)' -o'$@' '$<'
+	tapac --platform $(DEVICE) --work-dir $(TEMP_DIR) --top sextans -o'$@' '$<'
 $(BUILD_DIR)/sextans.xclbin: $(BINARY_CONTAINER_sextans_OBJS)
 	mkdir -p $(BUILD_DIR)
 	$(VPP) $(CLFLAGS) --temp_dir $(BUILD_DIR) -l $(LDCLFLAGS) -o'$@' $(+)
 
 # Building Host
-$(EXECUTABLE): check-xrt $(HOST_SRCS) $(HOST_HDRS)
-	$(CXX) $(CXXFLAGS) $(HOST_SRCS) $(HOST_HDRS) -o '$@' $(LDFLAGS)
+$(EXECUTABLE): $(HOST_SRCS) $(HOST_HDRS) src/sextans.cpp
+	$(CXX) $(CXXFLAGS) $(HOST_SRCS) $(HOST_HDRS) src/sextans.cpp -o '$@' -ltapa -lglog -lfrt $(LDFLAGS)
 
 emconfig:$(EMCONFIG_DIR)/emconfig.json
 $(EMCONFIG_DIR)/emconfig.json:
