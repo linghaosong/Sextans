@@ -2,15 +2,8 @@
 #include <cstdio>
 #include <cstring>
 #include <cassert>
-#include <hls_stream.h>
 
-//#define DEBUG_PRINT_KERNEL
-
-#ifdef DEBUG_PRINT_KERNEL
-#include <iostream>
-using std::cout;
-using std::endl;
-#endif
+#include <tapa.h>
 
 const int WINDOW_SIZE = 4096;
 const int DEP_DIST_LOAD_STORE = 10;
@@ -47,7 +40,7 @@ void read_edge_list_ptr(
 	const ap_uint<32> alpha_u_in,
 	const ap_uint<32> beta_u_in,
 	const ap_uint<32> *edge_list_ptr,
-	hls::stream<ap_uint<32> > & fifo_edge_list_ptr
+	tapa::ostream<ap_uint<32> > & fifo_edge_list_ptr
 	) {
 	const ap_uint<32> num_ite = num_ite_in;
 	fifo_edge_list_ptr.write(num_ite);
@@ -86,7 +79,7 @@ void read_edge_list_ptr(
 template <int ch>
 void read_A(
 	const ap_uint<512> *A,
-	hls::stream<ap_uint<512> > & fifo_A,
+	tapa::ostream<ap_uint<512> > & fifo_A,
 	const ap_uint<32> A_len,
 	const ap_uint<32> P_N
 	) {
@@ -113,7 +106,7 @@ void read_A(
 template <int chb>
 void read_B(
 	const ap_uint<512>* B,
-	hls::stream<ap_uint<512> > & fifo_B,
+	tapa::ostream<ap_uint<512> > & fifo_B,
 	const ap_uint<32> K,
 	const ap_uint<32> P_N
 	) {
@@ -267,18 +260,18 @@ void peg16mult(
 
 template <int ch>
 void PEG(
-	hls::stream<ap_uint<32> > & fifo_inst,
-	hls::stream<ap_uint<512> > & fifo_A,
-	hls::stream<ap_uint<512> > & fifo_B_x0, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x1, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x2, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x3, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<32> > & fifo_inst_out, // to next PE
-	hls::stream<ap_uint<512> > & fifo_B_out_x0, // output to next PE [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_out_x1, // output to next PE [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_out_x2, // output to next PE [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_out_x3, // output to next PE [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
+	tapa::istream<ap_uint<32> > & fifo_inst,
+	tapa::istream<ap_uint<512> > & fifo_A,
+	tapa::istream<ap_uint<512> > & fifo_B_x0, // [256(16)] * 2, 2: dim d
+	tapa::istream<ap_uint<512> > & fifo_B_x1, // [256(16)] * 2, 2: dim d
+	tapa::istream<ap_uint<512> > & fifo_B_x2, // [256(16)] * 2, 2: dim d
+	tapa::istream<ap_uint<512> > & fifo_B_x3, // [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<32> > & fifo_inst_out, // to next PE
+	tapa::ostream<ap_uint<512> > & fifo_B_out_x0, // output to next PE [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512> > & fifo_B_out_x1, // output to next PE [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512> > & fifo_B_out_x2, // output to next PE [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512> > & fifo_B_out_x3, // output to next PE [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512> > & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
 	) {
 #pragma HLS inline off
 	ap_uint<32> NUM_ITE;
@@ -292,7 +285,7 @@ void PEG(
 	w_ITE: for (ap_uint<3> i = 0; i < 6; ) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-		bool parameter_ready = fifo_inst.read_nb(parameter);
+		bool parameter_ready = fifo_inst.try_read(parameter);
 		if (parameter_ready) {
 			ap_uint<32> parameter_dealy = HLS_REG(parameter);
 			switch (i) {
@@ -552,7 +545,7 @@ void PEG(
 			w1: while(!start_32_ready) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-				start_32_ready = fifo_inst.read_nb(start_32);
+				start_32_ready = fifo_inst.try_read(start_32);
 			};
 
 			fifo_inst_out.write(start_32);
@@ -575,16 +568,16 @@ void PEG(
 #pragma HLS loop_tripcount min=1 max=512
 #pragma HLS pipeline II = 1
 					if (!b_512_x0_ready) {
-						b_512_x0_ready = fifo_B_x0.read_nb(b_512_x0);
+						b_512_x0_ready = fifo_B_x0.try_read(b_512_x0);
 					}
 					if (!b_512_x1_ready) {
-						b_512_x1_ready = fifo_B_x1.read_nb(b_512_x1);
+						b_512_x1_ready = fifo_B_x1.try_read(b_512_x1);
 					}
 					if (!b_512_x2_ready) {
-						b_512_x2_ready = fifo_B_x2.read_nb(b_512_x2);
+						b_512_x2_ready = fifo_B_x2.try_read(b_512_x2);
 					}
 					if (!b_512_x3_ready) {
-						b_512_x3_ready = fifo_B_x3.read_nb(b_512_x3);
+						b_512_x3_ready = fifo_B_x3.try_read(b_512_x3);
 					}
 
 					bool b_2048_ready = b_512_x0_ready && b_512_x1_ready && b_512_x2_ready && b_512_x3_ready;
@@ -660,7 +653,7 @@ void PEG(
 				w2: while(!end_32_ready) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-					end_32_ready = fifo_inst.read_nb(end_32);
+					end_32_ready = fifo_inst.try_read(end_32);
 				};
 
 				fifo_inst_out.write(end_32);
@@ -710,7 +703,7 @@ void PEG(
 #pragma HLS dependence true variable=local_C_pe7_d6_d7 distance=DEP_DIST_LOAD_STORE
 
 					ap_uint<512> a_pes;
-					bool a_pes_ready = fifo_A.read_nb(a_pes);
+					bool a_pes_ready = fifo_A.try_read(a_pes);
 
 					if (a_pes_ready) {
 						ap_uint<512> a_pes_delay = HLS_REG(a_pes);
@@ -974,13 +967,13 @@ void PEG(
 
 template <int ch>
 void PEG_last(
-	hls::stream<ap_uint<32> > & fifo_inst,
-	hls::stream<ap_uint<512> > & fifo_A,
-	hls::stream<ap_uint<512> > & fifo_B_x0, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x1, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x2, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x3, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
+	tapa::istream<ap_uint<32> > & fifo_inst,
+	tapa::istream<ap_uint<512> > & fifo_A,
+	tapa::istream<ap_uint<512> > & fifo_B_x0, // [256(16)] * 2, 2: dim d
+	tapa::istream<ap_uint<512> > & fifo_B_x1, // [256(16)] * 2, 2: dim d
+	tapa::istream<ap_uint<512> > & fifo_B_x2, // [256(16)] * 2, 2: dim d
+	tapa::istream<ap_uint<512> > & fifo_B_x3, // [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512> > & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
 	) {
 #pragma HLS inline off
 	ap_uint<32> NUM_ITE;
@@ -994,7 +987,7 @@ void PEG_last(
 	w_ITE: for (ap_uint<3> i = 0; i < 6; ) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-		bool parameter_ready = fifo_inst.read_nb(parameter);
+		bool parameter_ready = fifo_inst.try_read(parameter);
 		if (parameter_ready) {
 			ap_uint<32> parameter_dealy = HLS_REG(parameter);
 			switch (i) {
@@ -1259,7 +1252,7 @@ void PEG_last(
 			w1: while(!start_32_ready) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-				start_32_ready = fifo_inst.read_nb(start_32);
+				start_32_ready = fifo_inst.try_read(start_32);
 			};
 
 			main: for (ap_uint<32> i = 0; i < NUM_ITE; ++i) {
@@ -1280,16 +1273,16 @@ void PEG_last(
 #pragma HLS loop_tripcount min=1 max=512
 #pragma HLS pipeline II=1
 					if (!b_512_x0_ready) {
-						b_512_x0_ready = fifo_B_x0.read_nb(b_512_x0);
+						b_512_x0_ready = fifo_B_x0.try_read(b_512_x0);
 					}
 					if (!b_512_x1_ready) {
-						b_512_x1_ready = fifo_B_x1.read_nb(b_512_x1);
+						b_512_x1_ready = fifo_B_x1.try_read(b_512_x1);
 					}
 					if (!b_512_x2_ready) {
-						b_512_x2_ready = fifo_B_x2.read_nb(b_512_x2);
+						b_512_x2_ready = fifo_B_x2.try_read(b_512_x2);
 					}
 					if (!b_512_x3_ready) {
-						b_512_x3_ready = fifo_B_x3.read_nb(b_512_x3);
+						b_512_x3_ready = fifo_B_x3.try_read(b_512_x3);
 					}
 
 					bool b_2048_ready = b_512_x0_ready && b_512_x1_ready && b_512_x2_ready && b_512_x3_ready;
@@ -1361,7 +1354,7 @@ void PEG_last(
 				w2: while(!end_32_ready) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-					end_32_ready = fifo_inst.read_nb(end_32);
+					end_32_ready = fifo_inst.try_read(end_32);
 				};
 
 				computation: for (ap_uint<32> j = start_32; j < end_32; ) {
@@ -1409,7 +1402,7 @@ void PEG_last(
 #pragma HLS dependence true variable=local_C_pe7_d6_d7 distance=DEP_DIST_LOAD_STORE
 
 					ap_uint<512> a_pes;
-					bool a_pes_ready = fifo_A.read_nb(a_pes);
+					bool a_pes_ready = fifo_A.try_read(a_pes);
 
 					if (a_pes_ready) {
 						ap_uint<512> a_pes_delay = HLS_REG(a_pes);
@@ -1673,23 +1666,23 @@ void PEG_last(
 
 template <int id>
 void C_collect(
-    hls::stream<ap_uint<512> > & fifo_C_in0,
-    hls::stream<ap_uint<512> > & fifo_C_in1,
-    hls::stream<ap_uint<512> > & fifo_C_in2,
-    hls::stream<ap_uint<512> > & fifo_C_in3,
-    hls::stream<ap_uint<512> > & fifo_C_in4,
-    hls::stream<ap_uint<512> > & fifo_C_in5,
-    hls::stream<ap_uint<512> > & fifo_C_in6,
-    hls::stream<ap_uint<512> > & fifo_C_in7,
+    tapa::istream<ap_uint<512> > & fifo_C_in0,
+    tapa::istream<ap_uint<512> > & fifo_C_in1,
+    tapa::istream<ap_uint<512> > & fifo_C_in2,
+    tapa::istream<ap_uint<512> > & fifo_C_in3,
+    tapa::istream<ap_uint<512> > & fifo_C_in4,
+    tapa::istream<ap_uint<512> > & fifo_C_in5,
+    tapa::istream<ap_uint<512> > & fifo_C_in6,
+    tapa::istream<ap_uint<512> > & fifo_C_in7,
 
-    hls::stream<ap_uint<512> > & fifo_C_out0,
-    hls::stream<ap_uint<512> > & fifo_C_out1,
-    hls::stream<ap_uint<512> > & fifo_C_out2,
-    hls::stream<ap_uint<512> > & fifo_C_out3,
-    hls::stream<ap_uint<512> > & fifo_C_out4,
-    hls::stream<ap_uint<512> > & fifo_C_out5,
-    hls::stream<ap_uint<512> > & fifo_C_out6,
-    hls::stream<ap_uint<512> > & fifo_C_out7
+    tapa::ostream<ap_uint<512> > & fifo_C_out0,
+    tapa::ostream<ap_uint<512> > & fifo_C_out1,
+    tapa::ostream<ap_uint<512> > & fifo_C_out2,
+    tapa::ostream<ap_uint<512> > & fifo_C_out3,
+    tapa::ostream<ap_uint<512> > & fifo_C_out4,
+    tapa::ostream<ap_uint<512> > & fifo_C_out5,
+    tapa::ostream<ap_uint<512> > & fifo_C_out6,
+    tapa::ostream<ap_uint<512> > & fifo_C_out7
     ) {
     ap_uint<512> tmp_c0;
     ap_uint<512> tmp_c1;
@@ -1714,7 +1707,7 @@ void C_collect(
     w_Mxx: while(!M512_ready) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-        M512_ready = fifo_C_in7.read_nb(MN512);
+        M512_ready = fifo_C_in7.try_read(MN512);
     };
     ap_uint<32> M = MN512(31, 0);
     ap_uint<32> P_N = MN512(63, 32);
@@ -1749,28 +1742,28 @@ void C_collect(
 #pragma HLS loop_tripcount min=1 max=800
 #pragma HLS pipeline II=1
             if (!c0_ready) {
-                c0_ready = fifo_C_in0.read_nb(tmp_c0);
+                c0_ready = fifo_C_in0.try_read(tmp_c0);
             }
             if (!c1_ready) {
-                c1_ready = fifo_C_in1.read_nb(tmp_c1);
+                c1_ready = fifo_C_in1.try_read(tmp_c1);
             }
             if (!c2_ready) {
-                c2_ready = fifo_C_in2.read_nb(tmp_c2);
+                c2_ready = fifo_C_in2.try_read(tmp_c2);
             }
             if (!c3_ready) {
-                c3_ready = fifo_C_in3.read_nb(tmp_c3);
+                c3_ready = fifo_C_in3.try_read(tmp_c3);
             }
             if (!c4_ready) {
-                c4_ready = fifo_C_in4.read_nb(tmp_c4);
+                c4_ready = fifo_C_in4.try_read(tmp_c4);
             }
             if (!c5_ready) {
-                c5_ready = fifo_C_in5.read_nb(tmp_c5);
+                c5_ready = fifo_C_in5.try_read(tmp_c5);
             }
             if (!c6_ready) {
-                c6_ready = fifo_C_in6.read_nb(tmp_c6);
+                c6_ready = fifo_C_in6.try_read(tmp_c6);
             }
             if (!c7_ready) {
-                c7_ready = fifo_C_in7.read_nb(tmp_c7);
+                c7_ready = fifo_C_in7.try_read(tmp_c7);
             }
 
             bool all_c_ready = c0_ready && c1_ready && c2_ready && c3_ready && c4_ready && c5_ready && c6_ready && c7_ready;
@@ -1883,7 +1876,7 @@ void C_collect(
 
 template <int ch>
 void write_C(
-	hls::stream<ap_uint<512> > & fifo_C,
+	tapa::istream<ap_uint<512> > & fifo_C,
 	ap_uint<512>* C_out
 	) {
 	ap_uint<512> M_u512;
@@ -1891,7 +1884,7 @@ void write_C(
 	w_M: while(!M_ready) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-		M_ready = fifo_C.read_nb(M_u512);
+		M_ready = fifo_C.try_read(M_u512);
 	};
 	ap_uint<32> M = M_u512(31, 0);
 	ap_uint<32> P_N = M_u512(63, 32);
@@ -1916,7 +1909,7 @@ void write_C(
 template <int ch>
 void read_C(
 	ap_uint<512>* C,
-	hls::stream<ap_uint<512> > & fifo_C,
+	tapa::ostream<ap_uint<512> > & fifo_C,
 	const ap_uint<32> M,
 	const ap_uint<32> P_N
 	) {
@@ -1939,16 +1932,16 @@ void read_C(
 
 template <int ch>
 void comp_C(
-	hls::stream<ap_uint<512> > & fifo_C_read_in,
-	hls::stream<ap_uint<512> > & fifo_C_pe_in,
-	hls::stream<ap_uint<512> > & fifo_C_out
+	tapa::istream<ap_uint<512> > & fifo_C_read_in,
+	tapa::istream<ap_uint<512> > & fifo_C_pe_in,
+	tapa::ostream<ap_uint<512> > & fifo_C_out
 	) {
 	bool M_ready = false;
 	ap_uint<512> M512;
 	w_Mxx: while(!M_ready) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-		M_ready = fifo_C_pe_in.read_nb(M512);
+		M_ready = fifo_C_pe_in.try_read(M512);
 	};
 	fifo_C_out.write(M512);
 	ap_uint<32> M = M512(31, 0);
@@ -1977,10 +1970,10 @@ void comp_C(
 #pragma HLS loop_tripcount min=1 max=5000
 #pragma HLS pipeline II=1
 			if (!c_read_ready) {
-				c_read_ready = fifo_C_read_in.read_nb(c_read);
+				c_read_ready = fifo_C_read_in.try_read(c_read);
 			}
 			if (!c_pe_ready) {
-				c_pe_ready = fifo_C_pe_in.read_nb(c_pe);
+				c_pe_ready = fifo_C_pe_in.try_read(c_pe);
 			}
 
 			if (c_read_ready && c_pe_ready) {
@@ -2003,11 +1996,6 @@ void comp_C(
 		}
 	}
 }
-
-
-#ifndef HLS
-extern "C" {
-#endif
 
 void sextans(
 	const ap_uint<32> *edge_list_ptr,
@@ -2086,314 +2074,92 @@ void sextans(
 #pragma HLS INTERFACE m_axi port = mat_C_ch6_in offset = slave bundle = hbm30
 #pragma HLS INTERFACE m_axi port = mat_C_ch7_in offset = slave bundle = hbm31
 
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe0("fifo_edge_list_ptr_pe0");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe1("fifo_edge_list_ptr_pe1");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe2("fifo_edge_list_ptr_pe2");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe3("fifo_edge_list_ptr_pe3");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe4("fifo_edge_list_ptr_pe4");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe5("fifo_edge_list_ptr_pe5");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe6("fifo_edge_list_ptr_pe6");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe7("fifo_edge_list_ptr_pe7");
+	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe0("fifo_edge_list_ptr_pe0");
+	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe1("fifo_edge_list_ptr_pe1");
+	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe2("fifo_edge_list_ptr_pe2");
+	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe3("fifo_edge_list_ptr_pe3");
+	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe4("fifo_edge_list_ptr_pe4");
+	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe5("fifo_edge_list_ptr_pe5");
+	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe6("fifo_edge_list_ptr_pe6");
+	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe7("fifo_edge_list_ptr_pe7");
 
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe0 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe1 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe2 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe3 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe4 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe5 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe6 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe7 depth=8
+	tapa::stream<ap_uint<512>, 8> fifo_A_pe0("fifo_A_pe0");
+	tapa::stream<ap_uint<512>, 8> fifo_A_pe1("fifo_A_pe1");
+	tapa::stream<ap_uint<512>, 8> fifo_A_pe2("fifo_A_pe2");
+	tapa::stream<ap_uint<512>, 8> fifo_A_pe3("fifo_A_pe3");
+	tapa::stream<ap_uint<512>, 8> fifo_A_pe4("fifo_A_pe4");
+	tapa::stream<ap_uint<512>, 8> fifo_A_pe5("fifo_A_pe5");
+	tapa::stream<ap_uint<512>, 8> fifo_A_pe6("fifo_A_pe6");
+	tapa::stream<ap_uint<512>, 8> fifo_A_pe7("fifo_A_pe7");
 
-#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe4 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe5 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe6 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe7 type=FIFO impl=SRL
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe0_x0("fifo_B_pe0_x0");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe0_x1("fifo_B_pe0_x1");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe0_x2("fifo_B_pe0_x2");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe0_x3("fifo_B_pe0_x3");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe1_x0("fifo_B_pe1_x0");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe1_x1("fifo_B_pe1_x1");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe1_x2("fifo_B_pe1_x2");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe1_x3("fifo_B_pe1_x3");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe2_x0("fifo_B_pe2_x0");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe2_x1("fifo_B_pe2_x1");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe2_x2("fifo_B_pe2_x2");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe2_x3("fifo_B_pe2_x3");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe3_x0("fifo_B_pe3_x0");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe3_x1("fifo_B_pe3_x1");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe3_x2("fifo_B_pe3_x2");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe3_x3("fifo_B_pe3_x3");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe4_x0("fifo_B_pe4_x0");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe4_x1("fifo_B_pe4_x1");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe4_x2("fifo_B_pe4_x2");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe4_x3("fifo_B_pe4_x3");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe5_x0("fifo_B_pe5_x0");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe5_x1("fifo_B_pe5_x1");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe5_x2("fifo_B_pe5_x2");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe5_x3("fifo_B_pe5_x3");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe6_x0("fifo_B_pe6_x0");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe6_x1("fifo_B_pe6_x1");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe6_x2("fifo_B_pe6_x2");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe6_x3("fifo_B_pe6_x3");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe7_x0("fifo_B_pe7_x0");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe7_x1("fifo_B_pe7_x1");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe7_x2("fifo_B_pe7_x2");
+	tapa::stream<ap_uint<512>, 8> fifo_B_pe7_x3("fifo_B_pe7_x3");
 
-	hls::stream<ap_uint<512> > fifo_A_pe0("fifo_A_pe0");
-	hls::stream<ap_uint<512> > fifo_A_pe1("fifo_A_pe1");
-	hls::stream<ap_uint<512> > fifo_A_pe2("fifo_A_pe2");
-	hls::stream<ap_uint<512> > fifo_A_pe3("fifo_A_pe3");
-	hls::stream<ap_uint<512> > fifo_A_pe4("fifo_A_pe4");
-	hls::stream<ap_uint<512> > fifo_A_pe5("fifo_A_pe5");
-	hls::stream<ap_uint<512> > fifo_A_pe6("fifo_A_pe6");
-	hls::stream<ap_uint<512> > fifo_A_pe7("fifo_A_pe7");
+	tapa::stream<ap_uint<512>, 8> fifo_C_pe0("fifo_C_pe0");
+	tapa::stream<ap_uint<512>, 8> fifo_C_pe1("fifo_C_pe1");
+	tapa::stream<ap_uint<512>, 8> fifo_C_pe2("fifo_C_pe2");
+	tapa::stream<ap_uint<512>, 8> fifo_C_pe3("fifo_C_pe3");
+	tapa::stream<ap_uint<512>, 8> fifo_C_pe4("fifo_C_pe4");
+	tapa::stream<ap_uint<512>, 8> fifo_C_pe5("fifo_C_pe5");
+	tapa::stream<ap_uint<512>, 8> fifo_C_pe6("fifo_C_pe6");
+	tapa::stream<ap_uint<512>, 8> fifo_C_pe7("fifo_C_pe7");
 
-#pragma HLS STREAM variable=fifo_A_pe0 depth=8
-#pragma HLS STREAM variable=fifo_A_pe1 depth=8
-#pragma HLS STREAM variable=fifo_A_pe2 depth=8
-#pragma HLS STREAM variable=fifo_A_pe3 depth=8
-#pragma HLS STREAM variable=fifo_A_pe4 depth=8
-#pragma HLS STREAM variable=fifo_A_pe5 depth=8
-#pragma HLS STREAM variable=fifo_A_pe6 depth=8
-#pragma HLS STREAM variable=fifo_A_pe7 depth=8
+	tapa::stream<ap_uint<512>, 8> fifo_C_read_in0("fifo_C_read_in0");
+	tapa::stream<ap_uint<512>, 8> fifo_C_read_in1("fifo_C_read_in1");
+	tapa::stream<ap_uint<512>, 8> fifo_C_read_in2("fifo_C_read_in2");
+	tapa::stream<ap_uint<512>, 8> fifo_C_read_in3("fifo_C_read_in3");
+	tapa::stream<ap_uint<512>, 8> fifo_C_read_in4("fifo_C_read_in4");
+	tapa::stream<ap_uint<512>, 8> fifo_C_read_in5("fifo_C_read_in5");
+	tapa::stream<ap_uint<512>, 8> fifo_C_read_in6("fifo_C_read_in6");
+	tapa::stream<ap_uint<512>, 8> fifo_C_read_in7("fifo_C_read_in7");
 
-#pragma HLS bind_storage variable=fifo_A_pe0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_A_pe1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_A_pe2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_A_pe3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_A_pe4 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_A_pe5 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_A_pe6 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_A_pe7 type=FIFO impl=SRL
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch0_result("fifo_C_ch0_result");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch1_result("fifo_C_ch1_result");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch2_result("fifo_C_ch2_result");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch3_result("fifo_C_ch3_result");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch4_result("fifo_C_ch4_result");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch5_result("fifo_C_ch5_result");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch6_result("fifo_C_ch6_result");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch7_result("fifo_C_ch7_result");
 
-	hls::stream<ap_uint<512> > fifo_B_pe0_x0("fifo_B_pe0_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe0_x1("fifo_B_pe0_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe0_x2("fifo_B_pe0_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe0_x3("fifo_B_pe0_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe1_x0("fifo_B_pe1_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe1_x1("fifo_B_pe1_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe1_x2("fifo_B_pe1_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe1_x3("fifo_B_pe1_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe2_x0("fifo_B_pe2_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe2_x1("fifo_B_pe2_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe2_x2("fifo_B_pe2_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe2_x3("fifo_B_pe2_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe3_x0("fifo_B_pe3_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe3_x1("fifo_B_pe3_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe3_x2("fifo_B_pe3_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe3_x3("fifo_B_pe3_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe4_x0("fifo_B_pe4_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe4_x1("fifo_B_pe4_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe4_x2("fifo_B_pe4_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe4_x3("fifo_B_pe4_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe5_x0("fifo_B_pe5_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe5_x1("fifo_B_pe5_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe5_x2("fifo_B_pe5_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe5_x3("fifo_B_pe5_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe6_x0("fifo_B_pe6_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe6_x1("fifo_B_pe6_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe6_x2("fifo_B_pe6_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe6_x3("fifo_B_pe6_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe7_x0("fifo_B_pe7_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe7_x1("fifo_B_pe7_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe7_x2("fifo_B_pe7_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe7_x3("fifo_B_pe7_x3");
-
-#pragma HLS STREAM variable=fifo_B_pe0_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe0_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe0_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe0_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe1_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe1_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe1_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe1_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe2_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe2_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe2_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe2_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe3_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe3_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe3_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe3_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe4_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe4_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe4_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe4_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe5_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe5_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe5_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe5_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe6_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe6_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe6_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe6_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe7_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe7_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe7_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe7_x3 depth=8
-
-#pragma HLS bind_storage variable=fifo_B_pe0_x0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe0_x1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe0_x2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe0_x3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe1_x0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe1_x1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe1_x2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe1_x3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe2_x0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe2_x1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe2_x2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe2_x3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe3_x0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe3_x1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe3_x2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe3_x3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe4_x0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe4_x1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe4_x2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe4_x3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe5_x0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe5_x1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe5_x2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe5_x3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe6_x0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe6_x1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe6_x2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe6_x3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe7_x0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe7_x1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe7_x2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_B_pe7_x3 type=FIFO impl=SRL
-
-	hls::stream<ap_uint<512> > fifo_C_pe0("fifo_C_pe0");
-	hls::stream<ap_uint<512> > fifo_C_pe1("fifo_C_pe1");
-	hls::stream<ap_uint<512> > fifo_C_pe2("fifo_C_pe2");
-	hls::stream<ap_uint<512> > fifo_C_pe3("fifo_C_pe3");
-	hls::stream<ap_uint<512> > fifo_C_pe4("fifo_C_pe4");
-	hls::stream<ap_uint<512> > fifo_C_pe5("fifo_C_pe5");
-	hls::stream<ap_uint<512> > fifo_C_pe6("fifo_C_pe6");
-	hls::stream<ap_uint<512> > fifo_C_pe7("fifo_C_pe7");
-
-#pragma HLS STREAM variable=fifo_C_pe0 depth=8
-#pragma HLS STREAM variable=fifo_C_pe1 depth=8
-#pragma HLS STREAM variable=fifo_C_pe2 depth=8
-#pragma HLS STREAM variable=fifo_C_pe3 depth=8
-#pragma HLS STREAM variable=fifo_C_pe4 depth=8
-#pragma HLS STREAM variable=fifo_C_pe5 depth=8
-#pragma HLS STREAM variable=fifo_C_pe6 depth=8
-#pragma HLS STREAM variable=fifo_C_pe7 depth=8
-
-#pragma HLS bind_storage variable=fifo_C_pe0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_pe1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_pe2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_pe3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_pe4 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_pe5 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_pe6 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_pe7 type=FIFO impl=SRL
-
-	hls::stream<ap_uint<512> > fifo_C_read_in0("fifo_C_read_in0");
-	hls::stream<ap_uint<512> > fifo_C_read_in1("fifo_C_read_in1");
-	hls::stream<ap_uint<512> > fifo_C_read_in2("fifo_C_read_in2");
-	hls::stream<ap_uint<512> > fifo_C_read_in3("fifo_C_read_in3");
-	hls::stream<ap_uint<512> > fifo_C_read_in4("fifo_C_read_in4");
-	hls::stream<ap_uint<512> > fifo_C_read_in5("fifo_C_read_in5");
-	hls::stream<ap_uint<512> > fifo_C_read_in6("fifo_C_read_in6");
-	hls::stream<ap_uint<512> > fifo_C_read_in7("fifo_C_read_in7");
-
-#pragma HLS STREAM variable=fifo_C_read_in0 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in1 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in2 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in3 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in4 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in5 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in6 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in7 depth=8
-
-#pragma HLS bind_storage variable=fifo_C_read_in0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_read_in1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_read_in2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_read_in3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_read_in4 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_read_in5 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_read_in6 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_read_in7 type=FIFO impl=SRL
-
-	hls::stream<ap_uint<512> > fifo_C_ch0_result("fifo_C_ch0_result");
-	hls::stream<ap_uint<512> > fifo_C_ch1_result("fifo_C_ch1_result");
-	hls::stream<ap_uint<512> > fifo_C_ch2_result("fifo_C_ch2_result");
-	hls::stream<ap_uint<512> > fifo_C_ch3_result("fifo_C_ch3_result");
-	hls::stream<ap_uint<512> > fifo_C_ch4_result("fifo_C_ch4_result");
-	hls::stream<ap_uint<512> > fifo_C_ch5_result("fifo_C_ch5_result");
-	hls::stream<ap_uint<512> > fifo_C_ch6_result("fifo_C_ch6_result");
-	hls::stream<ap_uint<512> > fifo_C_ch7_result("fifo_C_ch7_result");
-
-#pragma HLS STREAM variable=fifo_C_ch0_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch1_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch2_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch3_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch4_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch5_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch6_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch7_result depth=8
-
-#pragma HLS bind_storage variable=fifo_C_ch0_result type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch1_result type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch2_result type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch3_result type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch4_result type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch5_result type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch6_result type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch7_result type=FIFO impl=SRL
-
-	hls::stream<ap_uint<512> > fifo_C_ch0("fifo_C_ch0");
-	hls::stream<ap_uint<512> > fifo_C_ch1("fifo_C_ch1");
-	hls::stream<ap_uint<512> > fifo_C_ch2("fifo_C_ch2");
-	hls::stream<ap_uint<512> > fifo_C_ch3("fifo_C_ch3");
-	hls::stream<ap_uint<512> > fifo_C_ch4("fifo_C_ch4");
-	hls::stream<ap_uint<512> > fifo_C_ch5("fifo_C_ch5");
-	hls::stream<ap_uint<512> > fifo_C_ch6("fifo_C_ch6");
-	hls::stream<ap_uint<512> > fifo_C_ch7("fifo_C_ch7");
-
-#pragma HLS STREAM variable=fifo_C_ch0 depth=8
-#pragma HLS STREAM variable=fifo_C_ch1 depth=8
-#pragma HLS STREAM variable=fifo_C_ch2 depth=8
-#pragma HLS STREAM variable=fifo_C_ch3 depth=8
-#pragma HLS STREAM variable=fifo_C_ch4 depth=8
-#pragma HLS STREAM variable=fifo_C_ch5 depth=8
-#pragma HLS STREAM variable=fifo_C_ch6 depth=8
-#pragma HLS STREAM variable=fifo_C_ch7 depth=8
-
-#pragma HLS bind_storage variable=fifo_C_ch0 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch1 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch2 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch3 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch4 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch5 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch6 type=FIFO impl=SRL
-#pragma HLS bind_storage variable=fifo_C_ch7 type=FIFO impl=SRL
-
-#pragma HLS dataflow
-
-	ap_uint<32> A_LEN0 = HLS_REG(NUM_A_LEN);
-	ap_uint<32> A_LEN1 = HLS_REG(A_LEN0);
-	ap_uint<32> A_LEN2 = HLS_REG(A_LEN1);
-	ap_uint<32> A_LEN3 = HLS_REG(A_LEN2);
-	ap_uint<32> A_LEN4 = HLS_REG(A_LEN3);
-	ap_uint<32> A_LEN5 = HLS_REG(A_LEN4);
-	ap_uint<32> A_LEN6 = HLS_REG(A_LEN5);
-	ap_uint<32> A_LEN7 = HLS_REG(A_LEN6);
-
-	ap_uint<32> N_rdA0 = HLS_REG(P_N);
-	ap_uint<32> N_rdA1 = HLS_REG(N_rdA0);
-	ap_uint<32> N_rdA2 = HLS_REG(N_rdA1);
-	ap_uint<32> N_rdA3 = HLS_REG(N_rdA2);
-	ap_uint<32> N_rdA4 = HLS_REG(N_rdA3);
-	ap_uint<32> N_rdA5 = HLS_REG(N_rdA4);
-	ap_uint<32> N_rdA6 = HLS_REG(N_rdA5);
-	ap_uint<32> N_rdA7 = HLS_REG(N_rdA6);
-
-	ap_uint<32> N_rdB0 = HLS_REG(P_N);
-	ap_uint<32> N_rdB1 = HLS_REG(N_rdB0);
-	ap_uint<32> N_rdB2 = HLS_REG(N_rdB1);
-	ap_uint<32> N_rdB3 = HLS_REG(N_rdB2);
-
-	ap_uint<32> N_rdC0 = HLS_REG(P_N);
-	ap_uint<32> N_rdC1 = HLS_REG(N_rdC0);
-	ap_uint<32> N_rdC2 = HLS_REG(N_rdC1);
-	ap_uint<32> N_rdC3 = HLS_REG(N_rdC2);
-	ap_uint<32> N_rdC4 = HLS_REG(N_rdC3);
-	ap_uint<32> N_rdC5 = HLS_REG(N_rdC4);
-	ap_uint<32> N_rdC6 = HLS_REG(N_rdC5);
-	ap_uint<32> N_rdC7 = HLS_REG(N_rdC6);
-
-	ap_uint<32> M_rdC0 = HLS_REG(M);
-	ap_uint<32> M_rdC1 = HLS_REG(M_rdC0);
-	ap_uint<32> M_rdC2 = HLS_REG(M_rdC1);
-	ap_uint<32> M_rdC3 = HLS_REG(M_rdC2);
-	ap_uint<32> M_rdC4 = HLS_REG(M_rdC3);
-	ap_uint<32> M_rdC5 = HLS_REG(M_rdC4);
-	ap_uint<32> M_rdC6 = HLS_REG(M_rdC5);
-	ap_uint<32> M_rdC7 = HLS_REG(M_rdC6);
-
-	ap_uint<32> K0 = HLS_REG(K);
-	ap_uint<32> K1 = HLS_REG(K0);
-	ap_uint<32> K2 = HLS_REG(K1);
-	ap_uint<32> K3 = HLS_REG(K2);
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch0("fifo_C_ch0");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch1("fifo_C_ch1");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch2("fifo_C_ch2");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch3("fifo_C_ch3");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch4("fifo_C_ch4");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch5("fifo_C_ch5");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch6("fifo_C_ch6");
+	tapa::stream<ap_uint<512>, 8> fifo_C_ch7("fifo_C_ch7");
 
 	read_edge_list_ptr(
 		NUM_ITE,
@@ -2409,85 +2175,85 @@ void sextans(
 	read_A<0>(
 		edge_list_ch0,
 		fifo_A_pe0,
-		A_LEN0,
-		N_rdA0
+		NUM_A_LEN,
+		P_N
 		);
 
 	read_A<1>(
 		edge_list_ch1,
 		fifo_A_pe1,
-		A_LEN1,
-		N_rdA1
+		NUM_A_LEN,
+		P_N
 		);
 
 	read_A<2>(
 		edge_list_ch2,
 		fifo_A_pe2,
-		A_LEN2,
-		N_rdA2
+		NUM_A_LEN,
+		P_N
 		);
 
 	read_A<3>(
 		edge_list_ch3,
 		fifo_A_pe3,
-		A_LEN3,
-		N_rdA3
+		NUM_A_LEN,
+		P_N
 		);
 
 	read_A<4>(
 		edge_list_ch4,
 		fifo_A_pe4,
-		A_LEN4,
-		N_rdA4
+		NUM_A_LEN,
+		P_N
 		);
 
 	read_A<5>(
 		edge_list_ch5,
 		fifo_A_pe5,
-		A_LEN5,
-		N_rdA5
+		NUM_A_LEN,
+		P_N
 		);
 
 	read_A<6>(
 		edge_list_ch6,
 		fifo_A_pe6,
-		A_LEN6,
-		N_rdA6
+		NUM_A_LEN,
+		P_N
 		);
 
 	read_A<7>(
 		edge_list_ch7,
 		fifo_A_pe7,
-		A_LEN7,
-		N_rdA7
+		NUM_A_LEN,
+		P_N
 		);
 
 	read_B<0>(
 		mat_B_ch0,
 		fifo_B_pe0_x0,
-		K0,
-		N_rdB0
+		K,
+		P_N
 		);
 
 	read_B<1>(
 		mat_B_ch1,
 		fifo_B_pe0_x1,
-		K1,
-		N_rdB1
+		K,
+		P_N
 		);
 
 	read_B<2>(
 		mat_B_ch2,
 		fifo_B_pe0_x2,
-		K2,
-		N_rdB2
+		K,
+		P_N
 		);
 
 	read_B<3>(
 		mat_B_ch3,
 		fifo_B_pe0_x3,
-		K3,
-		N_rdB3
+		K,
+		P_N
 		);
 
 	PEG<0>(
@@ -2628,57 +2394,57 @@ void sextans(
 	read_C<0>(
 		mat_C_ch0_in,
 		fifo_C_read_in0,
-		M_rdC0,
-		N_rdC0
+		M,
+		P_N
 		);
 
 	read_C<1>(
 		mat_C_ch1_in,
 		fifo_C_read_in1,
-		M_rdC1,
-		N_rdC1
+		M,
+		P_N
 		);
 
 	read_C<2>(
 		mat_C_ch2_in,
 		fifo_C_read_in2,
-		M_rdC2,
-		N_rdC2
+		M,
+		P_N
 		);
 
 	read_C<3>(
 		mat_C_ch3_in,
 		fifo_C_read_in3,
-		M_rdC3,
-		N_rdC3
+		M,
+		P_N
 		);
 
 	read_C<4>(
 		mat_C_ch4_in,
 		fifo_C_read_in4,
-		M_rdC4,
-		N_rdC4
+		M,
+		P_N
 		);
 
 	read_C<5>(
 		mat_C_ch5_in,
 		fifo_C_read_in5,
-		M_rdC5,
-		N_rdC5
+		M,
+		P_N
 		);
 
 	read_C<6>(
 		mat_C_ch6_in,
 		fifo_C_read_in6,
-		M_rdC6,
-		N_rdC6
+		M,
+		P_N
 		);
 
 	read_C<7>(
 		mat_C_ch7_in,
 		fifo_C_read_in7,
-		M_rdC7,
-		N_rdC7
+		M,
+		P_N
 		);
 
 	comp_C<0>(
@@ -2769,7 +2535,3 @@ void sextans(
 		mat_C_ch7
 		);
 }
-
-#ifndef HLS
-} // end of extern C
-#endif
