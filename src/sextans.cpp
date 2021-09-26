@@ -12,20 +12,6 @@ const int DEP_DIST_LOAD_STORE = 10;
 const int B_PARTITION_FACTOR = 4;
 const int URAM_DEPTH = 12288;
 
-float uint32_to_float(ap_uint<32> u) {
-#pragma HLS inline
-#pragma HLS pipeline II=1
-	float * tmpPointer_v = (float*) & u;
-	return (*tmpPointer_v);
-}
-
-ap_uint<32> float_to_uint32(float u) {
-#pragma HLS inline
-#pragma HLS pipeline II=1
-	ap_uint<32> * tmpPointer_v = (ap_uint<32>*) & u;
-	return (*tmpPointer_v);
-}
-
 void read_edge_list_ptr(
 	const ap_uint<32> num_ite_in,
 	const ap_uint<32> M_in,
@@ -133,14 +119,14 @@ void PU2core(
     ap_uint<32> c_val_d0_u = c_val_d0_d1_u64(31,  0);
     ap_uint<32> c_val_d1_u = c_val_d0_d1_u64(63, 32);
 
-    float c_val_d0_f = uint32_to_float(c_val_d0_u);
-    float c_val_d1_f = uint32_to_float(c_val_d1_u);
+    float c_val_d0_f = tapa::bit_cast<float>(c_val_d0_u);
+    float c_val_d1_f = tapa::bit_cast<float>(c_val_d1_u);
 
     c_val_d0_f += tapa::reg(a_val_f) * b_val_d0_f;
     c_val_d1_f += tapa::reg(a_val_f) * b_val_d1_f;
 
-    c_val_d0_u = float_to_uint32(c_val_d0_f);
-    c_val_d1_u = float_to_uint32(c_val_d1_f);
+    c_val_d0_u = tapa::bit_cast<ap_uint<32>>(c_val_d0_f);
+    c_val_d1_u = tapa::bit_cast<ap_uint<32>>(c_val_d1_f);
 
     c_val_d0_d1_u64(31,  0) = c_val_d0_u;
     c_val_d0_d1_u64(63, 32) = c_val_d1_u;
@@ -169,7 +155,7 @@ void PEcore(
     ) {
 #pragma HLS inline
     if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
-        float a_val_f = uint32_to_float(a_val_u);
+        float a_val_f = tapa::bit_cast<float>(a_val_u);
 
         ap_uint<32> b_val_d0_u = local_B_pe0_pe1_d0[addr_b];
         ap_uint<32> b_val_d1_u = local_B_pe0_pe1_d1[addr_b];
@@ -180,14 +166,14 @@ void PEcore(
         ap_uint<32> b_val_d6_u = local_B_pe0_pe1_d6[addr_b];
         ap_uint<32> b_val_d7_u = local_B_pe0_pe1_d7[addr_b];
 
-        float b_val_d0_f = uint32_to_float(b_val_d0_u);
-        float b_val_d1_f = uint32_to_float(b_val_d1_u);
-        float b_val_d2_f = uint32_to_float(b_val_d2_u);
-        float b_val_d3_f = uint32_to_float(b_val_d3_u);
-        float b_val_d4_f = uint32_to_float(b_val_d4_u);
-        float b_val_d5_f = uint32_to_float(b_val_d5_u);
-        float b_val_d6_f = uint32_to_float(b_val_d6_u);
-        float b_val_d7_f = uint32_to_float(b_val_d7_u);
+        float b_val_d0_f = tapa::bit_cast<float>(b_val_d0_u);
+        float b_val_d1_f = tapa::bit_cast<float>(b_val_d1_u);
+        float b_val_d2_f = tapa::bit_cast<float>(b_val_d2_u);
+        float b_val_d3_f = tapa::bit_cast<float>(b_val_d3_u);
+        float b_val_d4_f = tapa::bit_cast<float>(b_val_d4_u);
+        float b_val_d5_f = tapa::bit_cast<float>(b_val_d5_u);
+        float b_val_d6_f = tapa::bit_cast<float>(b_val_d6_u);
+        float b_val_d7_f = tapa::bit_cast<float>(b_val_d7_u);
 
         PU2core(
             addr_c,
@@ -230,7 +216,7 @@ void peg16mult(
 	ap_uint<512> & mult512
 	) {
 #pragma HLS inline
-		float alpha_f = uint32_to_float(alpha_u);
+		float alpha_f = tapa::bit_cast<float>(alpha_u);
 		ap_uint<512> c_out;
 
 		float op_a[16];
@@ -239,9 +225,9 @@ void peg16mult(
 #pragma HLS array_partition variable=op_result complete
 
 		for(ap_uint<5> p = 0; p < 16; ++p) {
-			op_a[p]      = uint32_to_float(opa512(31 + p * 32, p * 32));
+			op_a[p]      = tapa::bit_cast<float>(opa512(31 + p * 32, p * 32).to_uint());
 			op_result[p] = tapa::reg(alpha_f) * op_a[p];
-			c_out(31 + p * 32, p * 32) = float_to_uint32(op_result[p]);
+			c_out(31 + p * 32, p * 32) = tapa::bit_cast<ap_uint<32>>(op_result[p]);
 		}
 		mult512 = tapa::reg(c_out);
 }
@@ -1906,7 +1892,7 @@ void comp_C(
 	ap_uint<32> P_N = M512(63, 32);
 	ap_uint<32> beta_u = M512(95, 64);
 
-	float beta_f  = uint32_to_float(beta_u);
+	float beta_f = tapa::bit_cast<float>(beta_u);
 
 	ap_uint<512> c_out;
 	ap_uint<512> c_read;
@@ -1939,10 +1925,10 @@ void comp_C(
 				ap_uint<512> c_read_delay = tapa::reg(c_read);
 
 				for(ap_uint<5> p = 0; p < 16; ++p) {
-					float op_ab = uint32_to_float(c_pe_delay(31 + p * 32, p * 32));
-					float op_c  = uint32_to_float(c_read_delay(31 + p * 32, p * 32));
+					float op_ab = tapa::bit_cast<float>(c_pe_delay(31 + p * 32, p * 32).to_uint());
+					float op_c  = tapa::bit_cast<float>(c_read_delay(31 + p * 32, p * 32).to_uint());
 					float op_result = op_ab + tapa::reg(beta_f) * op_c;
-					c_out(31 + p * 32, p * 32) = float_to_uint32(op_result);
+					c_out(31 + p * 32, p * 32) = tapa::bit_cast<ap_uint<32>>(op_result);
 				}
 
 				ap_uint<512> c_out_reg = tapa::reg(c_out);
