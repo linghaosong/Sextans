@@ -19,22 +19,22 @@ const int URAM_DEPTH = 12288;
 
 template<class T>
 T HLS_REG(T in) {
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 #pragma HLS inline off
-#pragma HLS interface port=return register
+#pragma HLS LATENCY min=1 max=1
 	return in;
 }
 
 float uint32_to_float(ap_uint<32> u) {
-#pragma HLS inline  
-#pragma HLS pipeline
+#pragma HLS inline
+#pragma HLS pipeline II=1
 	float * tmpPointer_v = (float*) & u;
 	return (*tmpPointer_v);
 }
 
 ap_uint<32> float_to_uint32(float u) {
-#pragma HLS inline  
-#pragma HLS pipeline
+#pragma HLS inline
+#pragma HLS pipeline II=1
 	ap_uint<32> * tmpPointer_v = (ap_uint<32>*) & u;
 	return (*tmpPointer_v);
 }
@@ -75,7 +75,7 @@ void read_edge_list_ptr(
 #pragma HLS loop_tripcount min=1 max=16
 			rd_ptr: for(ap_uint<32> i = 0; i < num_ite + 1; i++) {
 #pragma HLS loop_tripcount min=1 max=800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				ap_uint<32> tmp = edge_list_ptr[i];
 				fifo_edge_list_ptr.write(tmp);
 			}
@@ -102,7 +102,7 @@ void read_A(
 #pragma HLS loop_tripcount min=1 max=16
 			rd_A: for(ap_uint<32> i = 0; i < A_len; i++) {
 #pragma HLS loop_tripcount min=1 max=10000
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				ap_uint<512> tmp_A = A[i];
 				fifo_A.write(tmp_A);
 			}
@@ -119,7 +119,7 @@ void read_B(
 	) {
 	const ap_uint<16> N16 = P_N(31, 16);
 	const ap_uint<16> rp_time = (N16 == 0)? ((ap_uint<16>) 1) : N16;
-	const ap_uint<32> N = P_N & ((ap_uint<32>) 0x0000FFFF);	
+	const ap_uint<32> N = P_N & ((ap_uint<32>) 0x0000FFFF);
 	const ap_uint<32> num_ite_B = ((K + 7) / 8) * ((N + 7) / 8);
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
@@ -127,7 +127,7 @@ void read_B(
 #pragma HLS loop_tripcount min=1 max=16
 		rd_B: for(ap_uint<32> i = 0; i < num_ite_B; i++) {
 #pragma HLS loop_tripcount min=1 max=500000
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 			ap_uint<512> tmp_B = B[i];
 			fifo_B.write(tmp_B);
 		}
@@ -141,7 +141,7 @@ void PU2core(
     float & a_val_f,
     float & b_val_d0_f,
     float & b_val_d1_f,
-             
+
     ap_uint<64> * local_C_pe0_d0_d1
     ) {
 #pragma HLS inline
@@ -152,16 +152,16 @@ void PU2core(
 
     float c_val_d0_f = uint32_to_float(c_val_d0_u);
     float c_val_d1_f = uint32_to_float(c_val_d1_u);
-    
+
     c_val_d0_f += HLS_REG(a_val_f) * b_val_d0_f;
     c_val_d1_f += HLS_REG(a_val_f) * b_val_d1_f;
-    
+
     c_val_d0_u = float_to_uint32(c_val_d0_f);
     c_val_d1_u = float_to_uint32(c_val_d1_f);
-    
+
     c_val_d0_d1_u64(31,  0) = c_val_d0_u;
     c_val_d0_d1_u64(63, 32) = c_val_d1_u;
-    
+
     local_C_pe0_d0_d1[addr_c] = c_val_d0_d1_u64;
 }
 
@@ -189,7 +189,7 @@ void PEcore(
 #pragma HLS inline
     if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
         float a_val_f = uint32_to_float(a_val_u);
-        
+
         ap_uint<32> b_val_d0_u = local_B_pe0_pe1_d0[addr_b];
         ap_uint<32> b_val_d1_u = local_B_pe0_pe1_d1[addr_b];
         ap_uint<32> b_val_d2_u = local_B_pe0_pe1_d2[addr_b];
@@ -198,7 +198,7 @@ void PEcore(
         ap_uint<32> b_val_d5_u = local_B_pe0_pe1_d5[addr_b];
         ap_uint<32> b_val_d6_u = local_B_pe0_pe1_d6[addr_b];
         ap_uint<32> b_val_d7_u = local_B_pe0_pe1_d7[addr_b];
-        
+
         float b_val_d0_f = uint32_to_float(b_val_d0_u);
         float b_val_d1_f = uint32_to_float(b_val_d1_u);
         float b_val_d2_f = uint32_to_float(b_val_d2_u);
@@ -207,7 +207,7 @@ void PEcore(
         float b_val_d5_f = uint32_to_float(b_val_d5_u);
         float b_val_d6_f = uint32_to_float(b_val_d6_u);
         float b_val_d7_f = uint32_to_float(b_val_d7_u);
-        
+
         PU2core<0>(
             addr_c,
             a_val_f,
@@ -215,7 +215,7 @@ void PEcore(
             b_val_d1_f,
             local_C_pe0_d0_d1
             );
-	    
+
         PU2core<1>(
             addr_c,
             a_val_f,
@@ -223,7 +223,7 @@ void PEcore(
             b_val_d3_f,
             local_C_pe0_d2_d3
             );
-        
+
         PU2core<2>(
             addr_c,
             a_val_f,
@@ -231,7 +231,7 @@ void PEcore(
             b_val_d5_f,
             local_C_pe0_d4_d5
             );
-        
+
         PU2core<3>(
             addr_c,
             a_val_f,
@@ -249,12 +249,11 @@ void peg16mult(
 	ap_uint<512> & mult512
 	) {
 #pragma HLS inline
-#pragma HLS pipeline
 		float alpha_f = uint32_to_float(alpha_u);
 		ap_uint<512> c_out;
 
 		float op_a[16];
-#pragma HLS array_partition variable=op_ab complete
+#pragma HLS array_partition variable=op_a complete
 		float op_result[16];
 #pragma HLS array_partition variable=op_result complete
 
@@ -292,7 +291,7 @@ void PEG(
 	ap_uint<32> parameter;
 	w_ITE: for (ap_uint<3> i = 0; i < 6; ) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 		bool parameter_ready = fifo_inst.read_nb(parameter);
 		if (parameter_ready) {
 			ap_uint<32> parameter_dealy = HLS_REG(parameter);
@@ -319,80 +318,80 @@ void PEG(
 	ap_uint<64> local_C_pe0_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe0_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe0_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe0_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe0_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe0_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe0_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe1_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe1_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe1_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe1_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe1_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe1_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe2_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe2_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe2_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe2_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe2_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe2_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe3_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe3_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe3_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe3_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe3_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe3_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe4_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe4_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe4_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe4_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe4_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe4_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe5_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe5_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe5_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe5_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe5_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe5_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe6_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe6_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe6_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe6_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe6_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe6_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe7_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe7_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe7_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe7_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe7_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe7_d6_d7 type=RAM_2P impl=URAM
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
@@ -404,7 +403,7 @@ void PEG(
 			//init local C
 			init_C: for (ap_uint<32> i = 0; i < ((M + 63) / 64); ++i) {
 #pragma HLS loop_tripcount min=1 max=800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				local_C_pe0_d0_d1[i] = 0;
 				local_C_pe0_d2_d3[i] = 0;
 				local_C_pe0_d4_d5[i] = 0;
@@ -449,14 +448,14 @@ void PEG(
 			ap_uint<32> local_B_pe0_pe1_d6[WINDOW_SIZE];
 			ap_uint<32> local_B_pe0_pe1_d7[WINDOW_SIZE];
 
-#pragma HLS resource variable=local_B_pe0_pe1_d0 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d1 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d2 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d3 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d4 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d5 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d6 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d7 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d0 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d1 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d2 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d3 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d4 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d5 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d6 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d7 latency=3
 
 #pragma HLS array_partition variable=local_B_pe0_pe1_d0 cyclic factor=B_PARTITION_FACTOR
 #pragma HLS array_partition variable=local_B_pe0_pe1_d1 cyclic factor=B_PARTITION_FACTOR
@@ -476,14 +475,14 @@ void PEG(
 			ap_uint<32> local_B_pe2_pe3_d6[WINDOW_SIZE];
 			ap_uint<32> local_B_pe2_pe3_d7[WINDOW_SIZE];
 
-#pragma HLS resource variable=local_B_pe2_pe3_d0 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d1 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d2 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d3 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d4 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d5 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d6 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d7 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d0 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d1 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d2 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d3 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d4 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d5 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d6 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d7 latency=3
 
 #pragma HLS array_partition variable=local_B_pe2_pe3_d0 cyclic factor=B_PARTITION_FACTOR
 #pragma HLS array_partition variable=local_B_pe2_pe3_d1 cyclic factor=B_PARTITION_FACTOR
@@ -503,14 +502,14 @@ void PEG(
 			ap_uint<32> local_B_pe4_pe5_d6[WINDOW_SIZE];
 			ap_uint<32> local_B_pe4_pe5_d7[WINDOW_SIZE];
 
-#pragma HLS resource variable=local_B_pe4_pe5_d0 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d1 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d2 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d3 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d4 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d5 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d6 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d7 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d0 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d1 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d2 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d3 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d4 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d5 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d6 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d7 latency=3
 
 #pragma HLS array_partition variable=local_B_pe4_pe5_d0 cyclic factor=B_PARTITION_FACTOR
 #pragma HLS array_partition variable=local_B_pe4_pe5_d1 cyclic factor=B_PARTITION_FACTOR
@@ -530,14 +529,14 @@ void PEG(
 			ap_uint<32> local_B_pe6_pe7_d6[WINDOW_SIZE];
 			ap_uint<32> local_B_pe6_pe7_d7[WINDOW_SIZE];
 
-#pragma HLS resource variable=local_B_pe6_pe7_d0 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d1 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d2 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d3 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d4 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d5 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d6 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d7 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d0 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d1 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d2 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d3 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d4 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d5 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d6 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d7 latency=3
 
 #pragma HLS array_partition variable=local_B_pe6_pe7_d0 cyclic factor=B_PARTITION_FACTOR
 #pragma HLS array_partition variable=local_B_pe6_pe7_d1 cyclic factor=B_PARTITION_FACTOR
@@ -552,7 +551,7 @@ void PEG(
 			bool start_32_ready = false;
 			w1: while(!start_32_ready) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				start_32_ready = fifo_inst.read_nb(start_32);
 			};
 
@@ -574,7 +573,7 @@ void PEG(
 
 				read_B: for (ap_uint<14> j = 0; (j < WINDOW_SIZE/8) && (j < (K + 7) / 8 - i*WINDOW_SIZE/8); ) {
 #pragma HLS loop_tripcount min=1 max=512
-#pragma HLS pipeline
+#pragma HLS pipeline II = 1
 					if (!b_512_x0_ready) {
 						b_512_x0_ready = fifo_B_x0.read_nb(b_512_x0);
 					}
@@ -660,7 +659,7 @@ void PEG(
 				bool end_32_ready = false;
 				w2: while(!end_32_ready) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 					end_32_ready = fifo_inst.read_nb(end_32);
 				};
 
@@ -668,7 +667,7 @@ void PEG(
 
 				computation: for (ap_uint<32> j = start_32; j < end_32; ) {
 #pragma HLS loop_tripcount min=1 max=200
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 
 #pragma HLS dependence true variable=local_C_pe0_d0_d1 distance=DEP_DIST_LOAD_STORE
 #pragma HLS dependence true variable=local_C_pe0_d2_d3 distance=DEP_DIST_LOAD_STORE
@@ -894,7 +893,7 @@ void PEG(
 			//write C fifo
 			write_C_outer: for (ap_uint<32> i = 0; i < (M + 15)/16; ++i) {
 #pragma HLS loop_tripcount min=1 max=1800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				ap_uint<64> u_64_pe_d[2][4];
 #pragma HLS array_partition variable=u_64_pe_d complete
 
@@ -994,7 +993,7 @@ void PEG_last(
 	ap_uint<32> parameter;
 	w_ITE: for (ap_uint<3> i = 0; i < 6; ) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 		bool parameter_ready = fifo_inst.read_nb(parameter);
 		if (parameter_ready) {
 			ap_uint<32> parameter_dealy = HLS_REG(parameter);
@@ -1026,80 +1025,80 @@ void PEG_last(
 	ap_uint<64> local_C_pe0_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe0_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe0_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe0_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe0_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe0_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe0_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe1_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe1_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe1_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe1_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe1_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe1_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe2_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe2_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe2_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe2_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe2_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe2_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe3_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe3_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe3_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe3_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe3_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe3_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe4_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe4_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe4_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe4_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe4_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe4_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe5_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe5_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe5_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe5_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe5_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe5_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe6_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe6_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe6_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe6_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe6_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe6_d6_d7 type=RAM_2P impl=URAM
 
 	ap_uint<64> local_C_pe7_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe7_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d6_d7 core=RAM_2P_URAM
+#pragma HLS bind_storage variable=local_C_pe7_d0_d1 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe7_d2_d3 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe7_d4_d5 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=local_C_pe7_d6_d7 type=RAM_2P impl=URAM
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
@@ -1111,7 +1110,7 @@ void PEG_last(
 			//init local C
 			init_C: for (ap_uint<32> i = 0; i < ((M + 63) / 64); ++i) {
 #pragma HLS loop_tripcount min=1 max=800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				local_C_pe0_d0_d1[i] = 0;
 				local_C_pe0_d2_d3[i] = 0;
 				local_C_pe0_d4_d5[i] = 0;
@@ -1156,14 +1155,14 @@ void PEG_last(
 			ap_uint<32> local_B_pe0_pe1_d6[WINDOW_SIZE];
 			ap_uint<32> local_B_pe0_pe1_d7[WINDOW_SIZE];
 
-#pragma HLS resource variable=local_B_pe0_pe1_d0 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d1 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d2 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d3 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d4 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d5 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d6 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d7 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d0 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d1 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d2 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d3 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d4 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d5 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d6 latency=3
+#pragma HLS bind_storage variable=local_B_pe0_pe1_d7 latency=3
 
 #pragma HLS array_partition variable=local_B_pe0_pe1_d0 cyclic factor=B_PARTITION_FACTOR
 #pragma HLS array_partition variable=local_B_pe0_pe1_d1 cyclic factor=B_PARTITION_FACTOR
@@ -1183,14 +1182,14 @@ void PEG_last(
 			ap_uint<32> local_B_pe2_pe3_d6[WINDOW_SIZE];
 			ap_uint<32> local_B_pe2_pe3_d7[WINDOW_SIZE];
 
-#pragma HLS resource variable=local_B_pe2_pe3_d0 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d1 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d2 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d3 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d4 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d5 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d6 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d7 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d0 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d1 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d2 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d3 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d4 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d5 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d6 latency=3
+#pragma HLS bind_storage variable=local_B_pe2_pe3_d7 latency=3
 
 #pragma HLS array_partition variable=local_B_pe2_pe3_d0 cyclic factor=B_PARTITION_FACTOR
 #pragma HLS array_partition variable=local_B_pe2_pe3_d1 cyclic factor=B_PARTITION_FACTOR
@@ -1210,14 +1209,14 @@ void PEG_last(
 			ap_uint<32> local_B_pe4_pe5_d6[WINDOW_SIZE];
 			ap_uint<32> local_B_pe4_pe5_d7[WINDOW_SIZE];
 
-#pragma HLS resource variable=local_B_pe4_pe5_d0 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d1 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d2 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d3 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d4 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d5 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d6 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d7 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d0 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d1 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d2 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d3 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d4 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d5 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d6 latency=3
+#pragma HLS bind_storage variable=local_B_pe4_pe5_d7 latency=3
 
 #pragma HLS array_partition variable=local_B_pe4_pe5_d0 cyclic factor=B_PARTITION_FACTOR
 #pragma HLS array_partition variable=local_B_pe4_pe5_d1 cyclic factor=B_PARTITION_FACTOR
@@ -1237,14 +1236,14 @@ void PEG_last(
 			ap_uint<32> local_B_pe6_pe7_d6[WINDOW_SIZE];
 			ap_uint<32> local_B_pe6_pe7_d7[WINDOW_SIZE];
 
-#pragma HLS resource variable=local_B_pe6_pe7_d0 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d1 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d2 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d3 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d4 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d5 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d6 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d7 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d0 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d1 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d2 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d3 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d4 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d5 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d6 latency=3
+#pragma HLS bind_storage variable=local_B_pe6_pe7_d7 latency=3
 
 #pragma HLS array_partition variable=local_B_pe6_pe7_d0 cyclic factor=B_PARTITION_FACTOR
 #pragma HLS array_partition variable=local_B_pe6_pe7_d1 cyclic factor=B_PARTITION_FACTOR
@@ -1259,7 +1258,7 @@ void PEG_last(
 			bool start_32_ready = false;
 			w1: while(!start_32_ready) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				start_32_ready = fifo_inst.read_nb(start_32);
 			};
 
@@ -1279,7 +1278,7 @@ void PEG_last(
 
 				read_B: for (ap_uint<14> j = 0; (j < WINDOW_SIZE/8) && (j < (K + 7) / 8 - i*WINDOW_SIZE/8); ) {
 #pragma HLS loop_tripcount min=1 max=512
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 					if (!b_512_x0_ready) {
 						b_512_x0_ready = fifo_B_x0.read_nb(b_512_x0);
 					}
@@ -1361,13 +1360,13 @@ void PEG_last(
 				bool end_32_ready = false;
 				w2: while(!end_32_ready) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 					end_32_ready = fifo_inst.read_nb(end_32);
 				};
 
 				computation: for (ap_uint<32> j = start_32; j < end_32; ) {
 #pragma HLS loop_tripcount min=1 max=200
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 
 #pragma HLS dependence true variable=local_C_pe0_d0_d1 distance=DEP_DIST_LOAD_STORE
 #pragma HLS dependence true variable=local_C_pe0_d2_d3 distance=DEP_DIST_LOAD_STORE
@@ -1593,7 +1592,7 @@ void PEG_last(
 			//write C fifo
 			write_C_outer: for (ap_uint<32> i = 0; i < (M + 15)/16; ++i) {
 #pragma HLS loop_tripcount min=1 max=1800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				ap_uint<64> u_64_pe_d[2][4];
 #pragma HLS array_partition variable=u_64_pe_d complete
 
@@ -1714,7 +1713,7 @@ void C_collect(
     bool M512_ready = false;
     w_Mxx: while(!M512_ready) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
         M512_ready = fifo_C_in7.read_nb(MN512);
     };
     ap_uint<32> M = MN512(31, 0);
@@ -1748,7 +1747,7 @@ void C_collect(
 #pragma HLS loop_tripcount min=1 max=16
         cvt_b: for(ap_uint<32> i = 0; i < num_ite; ) {
 #pragma HLS loop_tripcount min=1 max=800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
             if (!c0_ready) {
                 c0_ready = fifo_C_in0.read_nb(tmp_c0);
             }
@@ -1891,7 +1890,7 @@ void write_C(
 	bool M_ready = false;
 	w_M: while(!M_ready) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 		M_ready = fifo_C.read_nb(M_u512);
 	};
 	ap_uint<32> M = M_u512(31, 0);
@@ -1907,7 +1906,7 @@ void write_C(
 #pragma HLS loop_tripcount min=1 max=16
 		wr_C: for(ap_uint<32> i = 0; i < num_ite_C; i++) {
 #pragma HLS loop_tripcount min=1 max=500000
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 			ap_uint<512> tmp_c = fifo_C.read();
 			C_out[i] = tmp_c;
 		}
@@ -1931,7 +1930,7 @@ void read_C(
 #pragma HLS loop_tripcount min=1 max=16
 		rd_C: for(ap_uint<32> i = 0; i < num_ite_C; i++) {
 #pragma HLS loop_tripcount min=1 max=500000
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 			ap_uint<512> tmp_c = C[i];
 			fifo_C.write(tmp_c);
 		}
@@ -1948,7 +1947,7 @@ void comp_C(
 	ap_uint<512> M512;
 	w_Mxx: while(!M_ready) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 		M_ready = fifo_C_pe_in.read_nb(M512);
 	};
 	fifo_C_out.write(M512);
@@ -1976,7 +1975,7 @@ void comp_C(
 
 		cc: for (ap_uint<32> i = 0; i < num_ite_C; ) {
 #pragma HLS loop_tripcount min=1 max=5000
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 			if (!c_read_ready) {
 				c_read_ready = fifo_C_read_in.read_nb(c_read);
 			}
@@ -2087,16 +2086,6 @@ void sextans(
 #pragma HLS INTERFACE m_axi port = mat_C_ch6_in offset = slave bundle = hbm30
 #pragma HLS INTERFACE m_axi port = mat_C_ch7_in offset = slave bundle = hbm31
 
-#pragma HLS INTERFACE s_axilite port = NUM_ITE bundle = control
-#pragma HLS INTERFACE s_axilite port = NUM_A_LEN bundle = control
-#pragma HLS INTERFACE s_axilite port = M bundle = control
-#pragma HLS INTERFACE s_axilite port = K bundle = control
-#pragma HLS INTERFACE s_axilite port = P_N bundle = control
-#pragma HLS INTERFACE s_axilite port = alpha_u bundle = control
-#pragma HLS INTERFACE s_axilite port = beta_u bundle = control
-
-#pragma HLS INTERFACE s_axilite port = return bundle = control
-
 	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe0("fifo_edge_list_ptr_pe0");
 	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe1("fifo_edge_list_ptr_pe1");
 	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe2("fifo_edge_list_ptr_pe2");
@@ -2115,14 +2104,14 @@ void sextans(
 #pragma HLS STREAM variable=fifo_edge_list_ptr_pe6 depth=8
 #pragma HLS STREAM variable=fifo_edge_list_ptr_pe7 depth=8
 
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe7 core=FIFO_SRL
+#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe4 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe5 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe6 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_edge_list_ptr_pe7 type=FIFO impl=SRL
 
 	hls::stream<ap_uint<512> > fifo_A_pe0("fifo_A_pe0");
 	hls::stream<ap_uint<512> > fifo_A_pe1("fifo_A_pe1");
@@ -2142,14 +2131,14 @@ void sextans(
 #pragma HLS STREAM variable=fifo_A_pe6 depth=8
 #pragma HLS STREAM variable=fifo_A_pe7 depth=8
 
-#pragma HLS RESOURCE variable=fifo_A_pe0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe7 core=FIFO_SRL
+#pragma HLS bind_storage variable=fifo_A_pe0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_A_pe1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_A_pe2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_A_pe3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_A_pe4 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_A_pe5 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_A_pe6 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_A_pe7 type=FIFO impl=SRL
 
 	hls::stream<ap_uint<512> > fifo_B_pe0_x0("fifo_B_pe0_x0");
 	hls::stream<ap_uint<512> > fifo_B_pe0_x1("fifo_B_pe0_x1");
@@ -2217,38 +2206,38 @@ void sextans(
 #pragma HLS STREAM variable=fifo_B_pe7_x2 depth=8
 #pragma HLS STREAM variable=fifo_B_pe7_x3 depth=8
 
-#pragma HLS RESOURCE variable=fifo_B_pe0_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe0_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe0_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe0_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe1_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe1_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe1_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe1_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe2_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe2_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe2_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe2_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe3_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe3_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe3_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe3_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe4_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe4_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe4_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe4_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe5_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe5_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe5_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe5_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe6_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe6_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe6_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe6_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe7_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe7_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe7_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe7_x3 core=FIFO_SRL
+#pragma HLS bind_storage variable=fifo_B_pe0_x0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe0_x1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe0_x2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe0_x3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe1_x0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe1_x1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe1_x2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe1_x3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe2_x0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe2_x1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe2_x2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe2_x3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe3_x0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe3_x1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe3_x2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe3_x3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe4_x0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe4_x1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe4_x2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe4_x3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe5_x0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe5_x1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe5_x2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe5_x3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe6_x0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe6_x1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe6_x2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe6_x3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe7_x0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe7_x1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe7_x2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_B_pe7_x3 type=FIFO impl=SRL
 
 	hls::stream<ap_uint<512> > fifo_C_pe0("fifo_C_pe0");
 	hls::stream<ap_uint<512> > fifo_C_pe1("fifo_C_pe1");
@@ -2268,14 +2257,14 @@ void sextans(
 #pragma HLS STREAM variable=fifo_C_pe6 depth=8
 #pragma HLS STREAM variable=fifo_C_pe7 depth=8
 
-#pragma HLS RESOURCE variable=fifo_C_pe0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe7 core=FIFO_SRL
+#pragma HLS bind_storage variable=fifo_C_pe0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_pe1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_pe2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_pe3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_pe4 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_pe5 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_pe6 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_pe7 type=FIFO impl=SRL
 
 	hls::stream<ap_uint<512> > fifo_C_read_in0("fifo_C_read_in0");
 	hls::stream<ap_uint<512> > fifo_C_read_in1("fifo_C_read_in1");
@@ -2295,14 +2284,14 @@ void sextans(
 #pragma HLS STREAM variable=fifo_C_read_in6 depth=8
 #pragma HLS STREAM variable=fifo_C_read_in7 depth=8
 
-#pragma HLS RESOURCE variable=fifo_C_read_in0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in7 core=FIFO_SRL
+#pragma HLS bind_storage variable=fifo_C_read_in0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_read_in1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_read_in2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_read_in3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_read_in4 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_read_in5 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_read_in6 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_read_in7 type=FIFO impl=SRL
 
 	hls::stream<ap_uint<512> > fifo_C_ch0_result("fifo_C_ch0_result");
 	hls::stream<ap_uint<512> > fifo_C_ch1_result("fifo_C_ch1_result");
@@ -2322,14 +2311,14 @@ void sextans(
 #pragma HLS STREAM variable=fifo_C_ch6_result depth=8
 #pragma HLS STREAM variable=fifo_C_ch7_result depth=8
 
-#pragma HLS RESOURCE variable=fifo_C_ch0_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch1_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch2_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch3_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch4_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch5_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch6_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch7_result core=FIFO_SRL
+#pragma HLS bind_storage variable=fifo_C_ch0_result type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch1_result type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch2_result type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch3_result type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch4_result type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch5_result type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch6_result type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch7_result type=FIFO impl=SRL
 
 	hls::stream<ap_uint<512> > fifo_C_ch0("fifo_C_ch0");
 	hls::stream<ap_uint<512> > fifo_C_ch1("fifo_C_ch1");
@@ -2349,14 +2338,14 @@ void sextans(
 #pragma HLS STREAM variable=fifo_C_ch6 depth=8
 #pragma HLS STREAM variable=fifo_C_ch7 depth=8
 
-#pragma HLS RESOURCE variable=fifo_C_ch0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch7 core=FIFO_SRL
+#pragma HLS bind_storage variable=fifo_C_ch0 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch1 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch2 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch3 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch4 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch5 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch6 type=FIFO impl=SRL
+#pragma HLS bind_storage variable=fifo_C_ch7 type=FIFO impl=SRL
 
 #pragma HLS dataflow
 
