@@ -37,7 +37,10 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <iostream>
 
+#include <tapa/mmap.h>
+
 #include "mmio.h"
+#include "sextans.h"
 #include "sparse_helper.h"
 
 //#define DEBUG_PRINT 1
@@ -50,9 +53,6 @@ using std::vector;
 using std::min;
 using std::max;
 
-const int NUM_CH_SPARSE = 8;
-const int NUM_CH_B = 4;
-const int NUM_CH_C = 8;
 const int NUM_WINDOW_SIZE = 4096;
 
 int ceil_eightx(int x) {
@@ -335,190 +335,42 @@ int main(int argc, char **argv) {
     cout << "done (" << time_cpu*1000 << " msec)\n";
     cout <<"CPU GFLOPS: " << 2.0f*nnz*N/1000000000/time_cpu << "\n";
 
-    std::string binaryFile = argv[1];
-    cl_int err;
-    cl::Context context;
-    cl::Kernel krnl_sextans;
-    cl::CommandQueue q;
-
-    // OPENCL HOST CODE AREA START
-    auto devices = xcl::get_xil_devices();
-    auto fileBuf = xcl::read_binary_file(binaryFile);
-    cl::Program::Binaries bins{{fileBuf.data(), fileBuf.size()}};
-    int valid_device = 0;
-    printf("Num of devices : %d\n", (int)devices.size());
-    for (unsigned int i = 0; i < devices.size(); i++) {
-        auto device = devices[i];
-        // Creating Context and Command Queue for selected Device
-        OCL_CHECK(err, context = cl::Context({device}, NULL, NULL, NULL, &err));
-        OCL_CHECK(err,
-                q = cl::CommandQueue(
-                    context, {device}, CL_QUEUE_PROFILING_ENABLE, &err));
-
-        //if( device.getInfo<CL_DEVICE_NAME>() != "xilinx_u50_gen3x16_xdma_201920_3" ){
-        if( device.getInfo<CL_DEVICE_NAME>() != "xilinx_u280_xdma_201920_3" ){
-            cout  << "Skipping device : " << device.getInfo<CL_DEVICE_NAME>() << endl;
-            continue;
-        }
-        cout << "Trying to program device[" << i
-            << "]: " << device.getInfo<CL_DEVICE_NAME>() << endl;
-        OCL_CHECK(err,
-                cl::Program program(context, {device}, bins, NULL, &err));
-        if (err != CL_SUCCESS) {
-            cout << "Failed to program device[" << i
-                << "] with xclbin file!\n";
-        } else {
-            cout << "Device[" << i << "]: program successful!\n";
-            OCL_CHECK(err, krnl_sextans = cl::Kernel(program, "sextans", &err));
-            valid_device++;
-            break; // we break because we found a valid device
-        }
-    }
-    if (valid_device == 0) {
-        cout << "Failed to program any device found, exit!\n";
-        exit(EXIT_FAILURE);
-    }
-
-
-    std::vector<cl::Buffer> buffer_A;
-    std::vector<cl::Buffer> buffer_B;
-    std::vector<cl::Buffer> buffer_C_in;
-    std::vector<cl::Buffer> buffer_C;
-
-    for (int i = 0; i < NUM_CH_SPARSE; i++) {
-        OCL_CHECK(err,
-              cl::Buffer currA(context,
-                               CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,
-                               sparse_A_fpga_column_size*sizeof(unsigned long),
-                               sparse_A_fpga_vec[i].data(),
-                               &err);
-             );
-        buffer_A.push_back(std::move(currA));
-    }
-
-    for (int i = 0; i < NUM_CH_B; i++) {
-        OCL_CHECK(err,
-              cl::Buffer currA(context,
-                               CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,
-                               mat_B_fpga_column_size*(N/8)*sizeof(float),
-                               mat_B_fpga_vec[i].data(),
-                               &err);
-             );
-        buffer_B.push_back(std::move(currA));
-    }
-
-
-    for (int i = 0; i < NUM_CH_C; i++) {
-        OCL_CHECK(err,
-                  cl::Buffer currA(context,
-                                   CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,
-                                   mat_C_fpga_in_chunk_size*sizeof(float),
-                                   mat_C_fpga_in[i].data(),
-                                   &err);
-                  );
-        buffer_C_in.push_back(std::move(currA));
-    }
-
-
-    for (int i = 0; i < NUM_CH_C; i++) {
-        OCL_CHECK(err,
-                  cl::Buffer currA(context,
-                                   CL_MEM_USE_HOST_PTR | CL_MEM_WRITE_ONLY,
-                                   mat_C_fpga_chunk_size*sizeof(float),
-                                   mat_C_fpga_vec[i].data(),
-                                   &err);
-                  );
-        buffer_C.push_back(std::move(currA));
-    }
-
-    OCL_CHECK(err,
-              cl::Buffer buffer_edge_list_ptr(context,
-                                              CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,
-                                              edge_list_ptr_fpga_size*sizeof(unsigned int),
-                                              edge_list_ptr_fpga.data(),
-                                              &err);
-         );
-
-
-    // set argument
-    int parameter_pos = 0;
-
-    OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, buffer_edge_list_ptr));
-
-    for (int i = 0; i < NUM_CH_SPARSE; i++) {
-        OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, buffer_A[i]));
-    }
-
-    for (int i = 0; i < NUM_CH_B; i++) {
-        OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, buffer_B[i]));
-    }
-
-
-    for (int i = 0; i < NUM_CH_C; i++) {
-        OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, buffer_C_in[i]));
-    }
-
-
-    for (int i = 0; i < NUM_CH_C; i++) {
-        OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, buffer_C[i]));
-    }
-
     int MAX_SIZE_edge_LIST_PTR = edge_list_ptr.size() - 1;
-    OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, MAX_SIZE_edge_LIST_PTR));
-
     int MAX_LEN_edge_PTR = edge_list_ptr[MAX_SIZE_edge_LIST_PTR];
-    OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, MAX_LEN_edge_PTR));
-
-    OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, M));
-    OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, K));
     int para_N = (rp_time << 16) | N;
     //int para_N = N;
-    OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, para_N));
 
     unsigned int * tmpPointer_v;
     tmpPointer_v = (unsigned int*) &ALPHA;
     unsigned int alpha_int = *tmpPointer_v;
     tmpPointer_v = (unsigned int*) &BETA;
     unsigned int beta_int = *tmpPointer_v;
-    OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, alpha_int));
-    OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, beta_int));
-
 
     int launch_num = 1;
 
-    cout << "move data to HBM\n";
-    for ( int i = 0; i < NUM_CH_SPARSE; i++) {
-        OCL_CHECK(err, err = q.enqueueMigrateMemObjects({buffer_A[i]}, 0 /* 0 means from host*/));
-    }
-    for ( int i = 0; i < NUM_CH_B; i++) {
-        OCL_CHECK(err, err = q.enqueueMigrateMemObjects({buffer_B[i]}, 0 /* 0 means from host*/));
-    }
-    OCL_CHECK(err, err = q.enqueueMigrateMemObjects({buffer_edge_list_ptr}, 0 /* 0 means from host*/));
-
-    q.finish();
-
     cout << "launch kernel\n";
-    auto start = std::chrono::steady_clock::now();
     // Launch the Kernel
+    double time_taken = 0;
     for (int i = 0; i < launch_num; i++) {
-        OCL_CHECK(err, err = q.enqueueTask(krnl_sextans));
+        time_taken += tapa::invoke(
+            sextans,
+            argv[1],
+            tapa::read_only_mmap<const unsigned int>(edge_list_ptr_fpga).reinterpret<const ap_uint<32>>(),
+            tapa::read_only_mmaps<const unsigned long, NUM_CH_SPARSE>(sparse_A_fpga_vec).reinterpret<const ap_uint<512>>(),
+            tapa::read_only_mmaps<const float, NUM_CH_B>(mat_B_fpga_vec).reinterpret<const ap_uint<512>>(),
+            tapa::read_only_mmaps<float, NUM_CH_C>(mat_C_fpga_in).reinterpret<ap_uint<512>>(),
+            tapa::write_only_mmaps<float, NUM_CH_C>(mat_C_fpga_vec).reinterpret<ap_uint<512>>(),
+            MAX_SIZE_edge_LIST_PTR,
+            MAX_LEN_edge_PTR,
+            M,
+            K,
+            para_N,
+            alpha_int,
+            beta_int
+            );
     }
-    q.finish();
-
-    auto end = std::chrono::steady_clock::now();
-    double time_taken = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     time_taken *= 1e-9;
     printf("Kernel time is %f ms\n", time_taken*1000/launch_num);
-
-    cout << "move data to host\n";
-    // Copy Result from Device Global Memory to Host Local Memory
-    for (int i = 0; i < NUM_CH_C; i++) {
-        OCL_CHECK(err, err = q.enqueueMigrateMemObjects({buffer_C[i]}, CL_MIGRATE_MEM_OBJECT_HOST));
-    }
-    q.finish();
-    cout << "finish\n";
-
-
 
     float gflops =
         (2.0f * nnz * N)

@@ -5,6 +5,8 @@
 
 #include <tapa.h>
 
+#include "sextans.h"
+
 const int WINDOW_SIZE = 4096;
 const int DEP_DIST_LOAD_STORE = 10;
 const int B_PARTITION_FACTOR = 4;
@@ -39,8 +41,8 @@ void read_edge_list_ptr(
 	const ap_uint<32> K_in,
 	const ap_uint<32> alpha_u_in,
 	const ap_uint<32> beta_u_in,
-	const ap_uint<32> *edge_list_ptr,
-	tapa::ostream<ap_uint<32> > & fifo_edge_list_ptr
+	tapa::mmap<const ap_uint<32>> edge_list_ptr,
+	tapa::ostream<ap_uint<32>> & fifo_edge_list_ptr
 	) {
 	const ap_uint<32> num_ite = num_ite_in;
 	fifo_edge_list_ptr.write(num_ite);
@@ -76,10 +78,9 @@ void read_edge_list_ptr(
 	}
 }
 
-template <int ch>
 void read_A(
-	const ap_uint<512> *A,
-	tapa::ostream<ap_uint<512> > & fifo_A,
+	tapa::mmap<const ap_uint<512>> A,
+	tapa::ostream<ap_uint<512>> & fifo_A,
 	const ap_uint<32> A_len,
 	const ap_uint<32> P_N
 	) {
@@ -103,10 +104,9 @@ void read_A(
 	}
 }
 
-template <int chb>
 void read_B(
-	const ap_uint<512>* B,
-	tapa::ostream<ap_uint<512> > & fifo_B,
+	tapa::mmap<const ap_uint<512>> B,
+	tapa::ostream<ap_uint<512>> & fifo_B,
 	const ap_uint<32> K,
 	const ap_uint<32> P_N
 	) {
@@ -127,8 +127,6 @@ void read_B(
 	}
 }
 
-
-template <int ch>
 void PU2core(
     ap_uint<18> & addr_c,
     float & a_val_f,
@@ -158,8 +156,6 @@ void PU2core(
     local_C_pe0_d0_d1[addr_c] = c_val_d0_d1_u64;
 }
 
-
-template <int ch>
 void PEcore(
     ap_uint<14> & addr_b,
     ap_uint<18> & addr_c,
@@ -201,7 +197,7 @@ void PEcore(
         float b_val_d6_f = uint32_to_float(b_val_d6_u);
         float b_val_d7_f = uint32_to_float(b_val_d7_u);
 
-        PU2core<0>(
+        PU2core(
             addr_c,
             a_val_f,
             b_val_d0_f,
@@ -209,7 +205,7 @@ void PEcore(
             local_C_pe0_d0_d1
             );
 
-        PU2core<1>(
+        PU2core(
             addr_c,
             a_val_f,
             b_val_d2_f,
@@ -217,7 +213,7 @@ void PEcore(
             local_C_pe0_d2_d3
             );
 
-        PU2core<2>(
+        PU2core(
             addr_c,
             a_val_f,
             b_val_d4_f,
@@ -225,7 +221,7 @@ void PEcore(
             local_C_pe0_d4_d5
             );
 
-        PU2core<3>(
+        PU2core(
             addr_c,
             a_val_f,
             b_val_d6_f,
@@ -258,20 +254,13 @@ void peg16mult(
 		mult512 = HLS_REG(c_out);
 }
 
-template <int ch>
 void PEG(
-	tapa::istream<ap_uint<32> > & fifo_inst,
-	tapa::istream<ap_uint<512> > & fifo_A,
-	tapa::istream<ap_uint<512> > & fifo_B_x0, // [256(16)] * 2, 2: dim d
-	tapa::istream<ap_uint<512> > & fifo_B_x1, // [256(16)] * 2, 2: dim d
-	tapa::istream<ap_uint<512> > & fifo_B_x2, // [256(16)] * 2, 2: dim d
-	tapa::istream<ap_uint<512> > & fifo_B_x3, // [256(16)] * 2, 2: dim d
-	tapa::ostream<ap_uint<32> > & fifo_inst_out, // to next PE
-	tapa::ostream<ap_uint<512> > & fifo_B_out_x0, // output to next PE [256(16)] * 2, 2: dim d
-	tapa::ostream<ap_uint<512> > & fifo_B_out_x1, // output to next PE [256(16)] * 2, 2: dim d
-	tapa::ostream<ap_uint<512> > & fifo_B_out_x2, // output to next PE [256(16)] * 2, 2: dim d
-	tapa::ostream<ap_uint<512> > & fifo_B_out_x3, // output to next PE [256(16)] * 2, 2: dim d
-	tapa::ostream<ap_uint<512> > & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
+	tapa::istream<ap_uint<32>> & fifo_inst,
+	tapa::istream<ap_uint<512>> & fifo_A,
+	tapa::istreams<ap_uint<512>, NUM_CH_B> & fifo_B_x, // [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<32>> & fifo_inst_out, // to next PE
+	tapa::ostreams<ap_uint<512>, NUM_CH_B> & fifo_B_out_x, // output to next PE [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512>> & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
 	) {
 #pragma HLS inline off
 	ap_uint<32> NUM_ITE;
@@ -568,16 +557,16 @@ void PEG(
 #pragma HLS loop_tripcount min=1 max=512
 #pragma HLS pipeline II = 1
 					if (!b_512_x0_ready) {
-						b_512_x0_ready = fifo_B_x0.try_read(b_512_x0);
+						b_512_x0_ready = fifo_B_x[0].try_read(b_512_x0);
 					}
 					if (!b_512_x1_ready) {
-						b_512_x1_ready = fifo_B_x1.try_read(b_512_x1);
+						b_512_x1_ready = fifo_B_x[1].try_read(b_512_x1);
 					}
 					if (!b_512_x2_ready) {
-						b_512_x2_ready = fifo_B_x2.try_read(b_512_x2);
+						b_512_x2_ready = fifo_B_x[2].try_read(b_512_x2);
 					}
 					if (!b_512_x3_ready) {
-						b_512_x3_ready = fifo_B_x3.try_read(b_512_x3);
+						b_512_x3_ready = fifo_B_x[3].try_read(b_512_x3);
 					}
 
 					bool b_2048_ready = b_512_x0_ready && b_512_x1_ready && b_512_x2_ready && b_512_x3_ready;
@@ -588,10 +577,10 @@ void PEG(
 						ap_uint<512> b_512_x2_delay = HLS_REG(b_512_x2);
 						ap_uint<512> b_512_x3_delay = HLS_REG(b_512_x3);
 
-						fifo_B_out_x0.write(b_512_x0_delay);
-						fifo_B_out_x1.write(b_512_x1_delay);
-						fifo_B_out_x2.write(b_512_x2_delay);
-						fifo_B_out_x3.write(b_512_x3_delay);
+						fifo_B_out_x[0].write(b_512_x0_delay);
+						fifo_B_out_x[1].write(b_512_x1_delay);
+						fifo_B_out_x[2].write(b_512_x2_delay);
+						fifo_B_out_x[3].write(b_512_x3_delay);
 
 						read_B_p: for (ap_uint<4> k = 0; k < 8; ++k) {
 							ap_uint<32> b_pe_d0 = b_512_x0_delay(31 + k * 32 +   0,  k * 32 +   0);
@@ -731,7 +720,7 @@ void PEG(
 						}
 
 						// PE process
-						PEcore<0>(
+						PEcore(
 							a_col[0],
 							a_row[0],
 							a_val[0],
@@ -749,7 +738,7 @@ void PEG(
 							local_B_pe0_pe1_d7
 							);
 
-						PEcore<1>(
+						PEcore(
 							a_col[1],
 							a_row[1],
 							a_val[1],
@@ -767,7 +756,7 @@ void PEG(
 							local_B_pe0_pe1_d7
 							);
 
-						PEcore<2>(
+						PEcore(
 							a_col[2],
 							a_row[2],
 							a_val[2],
@@ -785,7 +774,7 @@ void PEG(
 							local_B_pe2_pe3_d7
 							);
 
-						PEcore<3>(
+						PEcore(
 							a_col[3],
 							a_row[3],
 							a_val[3],
@@ -803,7 +792,7 @@ void PEG(
 							local_B_pe2_pe3_d7
 							);
 
-						PEcore<4>(
+						PEcore(
 							a_col[4],
 							a_row[4],
 							a_val[4],
@@ -821,7 +810,7 @@ void PEG(
 							local_B_pe4_pe5_d7
 							);
 
-						PEcore<5>(
+						PEcore(
 							a_col[5],
 							a_row[5],
 							a_val[5],
@@ -839,7 +828,7 @@ void PEG(
 							local_B_pe4_pe5_d7
 							);
 
-						PEcore<6>(
+						PEcore(
 							a_col[6],
 							a_row[6],
 							a_val[6],
@@ -857,7 +846,7 @@ void PEG(
 							local_B_pe6_pe7_d7
 							);
 
-						PEcore<7>(
+						PEcore(
 							a_col[7],
 							a_row[7],
 							a_val[7],
@@ -965,15 +954,12 @@ void PEG(
 	}
 }
 
-template <int ch>
+
 void PEG_last(
-	tapa::istream<ap_uint<32> > & fifo_inst,
-	tapa::istream<ap_uint<512> > & fifo_A,
-	tapa::istream<ap_uint<512> > & fifo_B_x0, // [256(16)] * 2, 2: dim d
-	tapa::istream<ap_uint<512> > & fifo_B_x1, // [256(16)] * 2, 2: dim d
-	tapa::istream<ap_uint<512> > & fifo_B_x2, // [256(16)] * 2, 2: dim d
-	tapa::istream<ap_uint<512> > & fifo_B_x3, // [256(16)] * 2, 2: dim d
-	tapa::ostream<ap_uint<512> > & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
+	tapa::istream<ap_uint<32>> & fifo_inst,
+	tapa::istream<ap_uint<512>> & fifo_A,
+	tapa::istreams<ap_uint<512>, NUM_CH_B> & fifo_B_x, // [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512>> & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
 	) {
 #pragma HLS inline off
 	ap_uint<32> NUM_ITE;
@@ -1273,16 +1259,16 @@ void PEG_last(
 #pragma HLS loop_tripcount min=1 max=512
 #pragma HLS pipeline II=1
 					if (!b_512_x0_ready) {
-						b_512_x0_ready = fifo_B_x0.try_read(b_512_x0);
+						b_512_x0_ready = fifo_B_x[0].try_read(b_512_x0);
 					}
 					if (!b_512_x1_ready) {
-						b_512_x1_ready = fifo_B_x1.try_read(b_512_x1);
+						b_512_x1_ready = fifo_B_x[1].try_read(b_512_x1);
 					}
 					if (!b_512_x2_ready) {
-						b_512_x2_ready = fifo_B_x2.try_read(b_512_x2);
+						b_512_x2_ready = fifo_B_x[2].try_read(b_512_x2);
 					}
 					if (!b_512_x3_ready) {
-						b_512_x3_ready = fifo_B_x3.try_read(b_512_x3);
+						b_512_x3_ready = fifo_B_x[3].try_read(b_512_x3);
 					}
 
 					bool b_2048_ready = b_512_x0_ready && b_512_x1_ready && b_512_x2_ready && b_512_x3_ready;
@@ -1430,7 +1416,7 @@ void PEG_last(
 						}
 
 						// PE process
-						PEcore<0>(
+						PEcore(
 							a_col[0],
 							a_row[0],
 							a_val[0],
@@ -1448,7 +1434,7 @@ void PEG_last(
 							local_B_pe0_pe1_d7
 							);
 
-						PEcore<1>(
+						PEcore(
 							a_col[1],
 							a_row[1],
 							a_val[1],
@@ -1466,7 +1452,7 @@ void PEG_last(
 							local_B_pe0_pe1_d7
 							);
 
-						PEcore<2>(
+						PEcore(
 							a_col[2],
 							a_row[2],
 							a_val[2],
@@ -1484,7 +1470,7 @@ void PEG_last(
 							local_B_pe2_pe3_d7
 							);
 
-						PEcore<3>(
+						PEcore(
 							a_col[3],
 							a_row[3],
 							a_val[3],
@@ -1502,7 +1488,7 @@ void PEG_last(
 							local_B_pe2_pe3_d7
 							);
 
-						PEcore<4>(
+						PEcore(
 							a_col[4],
 							a_row[4],
 							a_val[4],
@@ -1520,7 +1506,7 @@ void PEG_last(
 							local_B_pe4_pe5_d7
 							);
 
-						PEcore<5>(
+						PEcore(
 							a_col[5],
 							a_row[5],
 							a_val[5],
@@ -1538,7 +1524,7 @@ void PEG_last(
 							local_B_pe4_pe5_d7
 							);
 
-						PEcore<6>(
+						PEcore(
 							a_col[6],
 							a_row[6],
 							a_val[6],
@@ -1556,7 +1542,7 @@ void PEG_last(
 							local_B_pe6_pe7_d7
 							);
 
-						PEcore<7>(
+						PEcore(
 							a_col[7],
 							a_row[7],
 							a_val[7],
@@ -1664,25 +1650,9 @@ void PEG_last(
 	}
 }
 
-template <int id>
 void C_collect(
-    tapa::istream<ap_uint<512> > & fifo_C_in0,
-    tapa::istream<ap_uint<512> > & fifo_C_in1,
-    tapa::istream<ap_uint<512> > & fifo_C_in2,
-    tapa::istream<ap_uint<512> > & fifo_C_in3,
-    tapa::istream<ap_uint<512> > & fifo_C_in4,
-    tapa::istream<ap_uint<512> > & fifo_C_in5,
-    tapa::istream<ap_uint<512> > & fifo_C_in6,
-    tapa::istream<ap_uint<512> > & fifo_C_in7,
-
-    tapa::ostream<ap_uint<512> > & fifo_C_out0,
-    tapa::ostream<ap_uint<512> > & fifo_C_out1,
-    tapa::ostream<ap_uint<512> > & fifo_C_out2,
-    tapa::ostream<ap_uint<512> > & fifo_C_out3,
-    tapa::ostream<ap_uint<512> > & fifo_C_out4,
-    tapa::ostream<ap_uint<512> > & fifo_C_out5,
-    tapa::ostream<ap_uint<512> > & fifo_C_out6,
-    tapa::ostream<ap_uint<512> > & fifo_C_out7
+    tapa::istreams<ap_uint<512>, NUM_CH_SPARSE> & fifo_C_in,
+    tapa::ostreams<ap_uint<512>, NUM_CH_C> & fifo_C_out
     ) {
     ap_uint<512> tmp_c0;
     ap_uint<512> tmp_c1;
@@ -1707,7 +1677,7 @@ void C_collect(
     w_Mxx: while(!M512_ready) {
 #pragma HLS loop_tripcount min=1 max=10
 #pragma HLS pipeline II=1
-        M512_ready = fifo_C_in7.try_read(MN512);
+        M512_ready = fifo_C_in[7].try_read(MN512);
     };
     ap_uint<32> M = MN512(31, 0);
     ap_uint<32> P_N = MN512(63, 32);
@@ -1721,14 +1691,14 @@ void C_collect(
     ap_uint<512> out_c6;
     ap_uint<512> out_c7;
 
-    fifo_C_out0.write(HLS_REG(MN512));
-    fifo_C_out1.write(HLS_REG(MN512));
-    fifo_C_out2.write(HLS_REG(MN512));
-    fifo_C_out3.write(HLS_REG(MN512));
-    fifo_C_out4.write(HLS_REG(MN512));
-    fifo_C_out5.write(HLS_REG(MN512));
-    fifo_C_out6.write(HLS_REG(MN512));
-    fifo_C_out7.write(HLS_REG(MN512));
+    fifo_C_out[0].write(HLS_REG(MN512));
+    fifo_C_out[1].write(HLS_REG(MN512));
+    fifo_C_out[2].write(HLS_REG(MN512));
+    fifo_C_out[3].write(HLS_REG(MN512));
+    fifo_C_out[4].write(HLS_REG(MN512));
+    fifo_C_out[5].write(HLS_REG(MN512));
+    fifo_C_out[6].write(HLS_REG(MN512));
+    fifo_C_out[7].write(HLS_REG(MN512));
 
     const ap_uint<16> N16 = P_N(31, 16);
     const ap_uint<16> rp_time = (N16 == 0)? ((ap_uint<16>) 1) : N16;
@@ -1742,28 +1712,28 @@ void C_collect(
 #pragma HLS loop_tripcount min=1 max=800
 #pragma HLS pipeline II=1
             if (!c0_ready) {
-                c0_ready = fifo_C_in0.try_read(tmp_c0);
+                c0_ready = fifo_C_in[0].try_read(tmp_c0);
             }
             if (!c1_ready) {
-                c1_ready = fifo_C_in1.try_read(tmp_c1);
+                c1_ready = fifo_C_in[1].try_read(tmp_c1);
             }
             if (!c2_ready) {
-                c2_ready = fifo_C_in2.try_read(tmp_c2);
+                c2_ready = fifo_C_in[2].try_read(tmp_c2);
             }
             if (!c3_ready) {
-                c3_ready = fifo_C_in3.try_read(tmp_c3);
+                c3_ready = fifo_C_in[3].try_read(tmp_c3);
             }
             if (!c4_ready) {
-                c4_ready = fifo_C_in4.try_read(tmp_c4);
+                c4_ready = fifo_C_in[4].try_read(tmp_c4);
             }
             if (!c5_ready) {
-                c5_ready = fifo_C_in5.try_read(tmp_c5);
+                c5_ready = fifo_C_in[5].try_read(tmp_c5);
             }
             if (!c6_ready) {
-                c6_ready = fifo_C_in6.try_read(tmp_c6);
+                c6_ready = fifo_C_in[6].try_read(tmp_c6);
             }
             if (!c7_ready) {
-                c7_ready = fifo_C_in7.try_read(tmp_c7);
+                c7_ready = fifo_C_in[7].try_read(tmp_c7);
             }
 
             bool all_c_ready = c0_ready && c1_ready && c2_ready && c3_ready && c4_ready && c5_ready && c6_ready && c7_ready;
@@ -1850,14 +1820,14 @@ void C_collect(
                 out_c7(447, 384) = tmp_c6_delay( 511,  448);
                 out_c7(511, 448) = tmp_c7_delay( 511,  448);
 
-                fifo_C_out0.write(out_c0);
-                fifo_C_out1.write(out_c1);
-                fifo_C_out2.write(out_c2);
-                fifo_C_out3.write(out_c3);
-                fifo_C_out4.write(out_c4);
-                fifo_C_out5.write(out_c5);
-                fifo_C_out6.write(out_c6);
-                fifo_C_out7.write(out_c7);
+                fifo_C_out[0].write(out_c0);
+                fifo_C_out[1].write(out_c1);
+                fifo_C_out[2].write(out_c2);
+                fifo_C_out[3].write(out_c3);
+                fifo_C_out[4].write(out_c4);
+                fifo_C_out[5].write(out_c5);
+                fifo_C_out[6].write(out_c6);
+                fifo_C_out[7].write(out_c7);
 
                 c0_ready = false;
                 c1_ready = false;
@@ -1873,11 +1843,9 @@ void C_collect(
     }
 }
 
-
-template <int ch>
 void write_C(
-	tapa::istream<ap_uint<512> > & fifo_C,
-	ap_uint<512>* C_out
+	tapa::istream<ap_uint<512>> & fifo_C,
+	tapa::mmap<ap_uint<512>> C_out
 	) {
 	ap_uint<512> M_u512;
 	bool M_ready = false;
@@ -1906,10 +1874,9 @@ void write_C(
 	}
 }
 
-template <int ch>
 void read_C(
-	ap_uint<512>* C,
-	tapa::ostream<ap_uint<512> > & fifo_C,
+	tapa::mmap<ap_uint<512>> C,
+	tapa::ostream<ap_uint<512>> & fifo_C,
 	const ap_uint<32> M,
 	const ap_uint<32> P_N
 	) {
@@ -1930,11 +1897,10 @@ void read_C(
 	}
 }
 
-template <int ch>
 void comp_C(
-	tapa::istream<ap_uint<512> > & fifo_C_read_in,
-	tapa::istream<ap_uint<512> > & fifo_C_pe_in,
-	tapa::ostream<ap_uint<512> > & fifo_C_out
+	tapa::istream<ap_uint<512>> & fifo_C_read_in,
+	tapa::istream<ap_uint<512>> & fifo_C_pe_in,
+	tapa::ostream<ap_uint<512>> & fifo_C_out
 	) {
 	bool M_ready = false;
 	ap_uint<512> M512;
@@ -1997,40 +1963,18 @@ void comp_C(
 	}
 }
 
+constexpr int FIFO_DEPTH = 8;
+
 void sextans(
-	const ap_uint<32> *edge_list_ptr,
+	tapa::mmap<const ap_uint<32>> edge_list_ptr,
 
-	const ap_uint<512> *edge_list_ch0,
-	const ap_uint<512> *edge_list_ch1,
-	const ap_uint<512> *edge_list_ch2,
-	const ap_uint<512> *edge_list_ch3,
-	const ap_uint<512> *edge_list_ch4,
-	const ap_uint<512> *edge_list_ch5,
-	const ap_uint<512> *edge_list_ch6,
-	const ap_uint<512> *edge_list_ch7,
+	tapa::mmaps<const ap_uint<512>, NUM_CH_SPARSE> edge_list_ch,
 
-	const ap_uint<512>  *mat_B_ch0,
-	const ap_uint<512>  *mat_B_ch1,
-	const ap_uint<512>  *mat_B_ch2,
-	const ap_uint<512>  *mat_B_ch3,
+	tapa::mmaps<const ap_uint<512>, NUM_CH_B> mat_B_ch,
 
-	ap_uint<512>  *mat_C_ch0_in,
-	ap_uint<512>  *mat_C_ch1_in,
-	ap_uint<512>  *mat_C_ch2_in,
-	ap_uint<512>  *mat_C_ch3_in,
-	ap_uint<512>  *mat_C_ch4_in,
-	ap_uint<512>  *mat_C_ch5_in,
-	ap_uint<512>  *mat_C_ch6_in,
-	ap_uint<512>  *mat_C_ch7_in,
+	tapa::mmaps<ap_uint<512>, NUM_CH_C> mat_C_ch_in,
 
-	ap_uint<512>  *mat_C_ch0,
-	ap_uint<512>  *mat_C_ch1,
-	ap_uint<512>  *mat_C_ch2,
-	ap_uint<512>  *mat_C_ch3,
-	ap_uint<512>  *mat_C_ch4,
-	ap_uint<512>  *mat_C_ch5,
-	ap_uint<512>  *mat_C_ch6,
-	ap_uint<512>  *mat_C_ch7,
+	tapa::mmaps<ap_uint<512>, NUM_CH_C> mat_C_ch,
 
 	const int NUM_ITE,
 	const int NUM_A_LEN,
@@ -2040,128 +1984,22 @@ void sextans(
 	const unsigned int alpha_u,
 	const unsigned int beta_u
 ) {
-#pragma HLS INTERFACE m_axi port = edge_list_ptr offset = slave bundle = hbm0
+	tapa::streams<ap_uint<32>, NUM_CH_SPARSE, FIFO_DEPTH> fifo_edge_list_ptr_pe("fifo_edge_list_ptr_pe");
 
-#pragma HLS INTERFACE m_axi port = edge_list_ch0 offset = slave bundle = hbm1
-#pragma HLS INTERFACE m_axi port = edge_list_ch1 offset = slave bundle = hbm2
-#pragma HLS INTERFACE m_axi port = edge_list_ch2 offset = slave bundle = hbm3
-#pragma HLS INTERFACE m_axi port = edge_list_ch3 offset = slave bundle = hbm4
-#pragma HLS INTERFACE m_axi port = edge_list_ch4 offset = slave bundle = hbm5
-#pragma HLS INTERFACE m_axi port = edge_list_ch5 offset = slave bundle = hbm6
-#pragma HLS INTERFACE m_axi port = edge_list_ch6 offset = slave bundle = hbm7
-#pragma HLS INTERFACE m_axi port = edge_list_ch7 offset = slave bundle = hbm8
+	tapa::streams<ap_uint<512>, NUM_CH_SPARSE, FIFO_DEPTH> fifo_A_pe("fifo_A_pe");
 
-#pragma HLS INTERFACE m_axi port = mat_B_ch0 offset = slave bundle = hbm9
-#pragma HLS INTERFACE m_axi port = mat_B_ch1 offset = slave bundle = hbm10
-#pragma HLS INTERFACE m_axi port = mat_B_ch2 offset = slave bundle = hbm11
-#pragma HLS INTERFACE m_axi port = mat_B_ch3 offset = slave bundle = hbm12
+	tapa::streams<ap_uint<512>, NUM_CH_SPARSE * NUM_CH_B, FIFO_DEPTH> fifo_B_pe_x("fifo_B_pe_x");
 
-#pragma HLS INTERFACE m_axi port = mat_C_ch0 offset = slave bundle = hbm16
-#pragma HLS INTERFACE m_axi port = mat_C_ch1 offset = slave bundle = hbm17
-#pragma HLS INTERFACE m_axi port = mat_C_ch2 offset = slave bundle = hbm18
-#pragma HLS INTERFACE m_axi port = mat_C_ch3 offset = slave bundle = hbm19
-#pragma HLS INTERFACE m_axi port = mat_C_ch4 offset = slave bundle = hbm20
-#pragma HLS INTERFACE m_axi port = mat_C_ch5 offset = slave bundle = hbm21
-#pragma HLS INTERFACE m_axi port = mat_C_ch6 offset = slave bundle = hbm22
-#pragma HLS INTERFACE m_axi port = mat_C_ch7 offset = slave bundle = hbm23
+	tapa::streams<ap_uint<512>, NUM_CH_SPARSE, FIFO_DEPTH> fifo_C_pe("fifo_C_pe");
 
-#pragma HLS INTERFACE m_axi port = mat_C_ch0_in offset = slave bundle = hbm24
-#pragma HLS INTERFACE m_axi port = mat_C_ch1_in offset = slave bundle = hbm25
-#pragma HLS INTERFACE m_axi port = mat_C_ch2_in offset = slave bundle = hbm26
-#pragma HLS INTERFACE m_axi port = mat_C_ch3_in offset = slave bundle = hbm27
-#pragma HLS INTERFACE m_axi port = mat_C_ch4_in offset = slave bundle = hbm28
-#pragma HLS INTERFACE m_axi port = mat_C_ch5_in offset = slave bundle = hbm29
-#pragma HLS INTERFACE m_axi port = mat_C_ch6_in offset = slave bundle = hbm30
-#pragma HLS INTERFACE m_axi port = mat_C_ch7_in offset = slave bundle = hbm31
+	tapa::streams<ap_uint<512>, NUM_CH_C, FIFO_DEPTH> fifo_C_read_in("fifo_C_read_in");
 
-	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe0("fifo_edge_list_ptr_pe0");
-	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe1("fifo_edge_list_ptr_pe1");
-	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe2("fifo_edge_list_ptr_pe2");
-	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe3("fifo_edge_list_ptr_pe3");
-	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe4("fifo_edge_list_ptr_pe4");
-	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe5("fifo_edge_list_ptr_pe5");
-	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe6("fifo_edge_list_ptr_pe6");
-	tapa::stream<ap_uint<32>, 8> fifo_edge_list_ptr_pe7("fifo_edge_list_ptr_pe7");
+	tapa::streams<ap_uint<512>, NUM_CH_C, FIFO_DEPTH> fifo_C_ch_result("fifo_C_ch_result");
 
-	tapa::stream<ap_uint<512>, 8> fifo_A_pe0("fifo_A_pe0");
-	tapa::stream<ap_uint<512>, 8> fifo_A_pe1("fifo_A_pe1");
-	tapa::stream<ap_uint<512>, 8> fifo_A_pe2("fifo_A_pe2");
-	tapa::stream<ap_uint<512>, 8> fifo_A_pe3("fifo_A_pe3");
-	tapa::stream<ap_uint<512>, 8> fifo_A_pe4("fifo_A_pe4");
-	tapa::stream<ap_uint<512>, 8> fifo_A_pe5("fifo_A_pe5");
-	tapa::stream<ap_uint<512>, 8> fifo_A_pe6("fifo_A_pe6");
-	tapa::stream<ap_uint<512>, 8> fifo_A_pe7("fifo_A_pe7");
+	tapa::streams<ap_uint<512>, NUM_CH_C, FIFO_DEPTH> fifo_C_ch("fifo_C_ch");
 
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe0_x0("fifo_B_pe0_x0");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe0_x1("fifo_B_pe0_x1");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe0_x2("fifo_B_pe0_x2");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe0_x3("fifo_B_pe0_x3");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe1_x0("fifo_B_pe1_x0");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe1_x1("fifo_B_pe1_x1");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe1_x2("fifo_B_pe1_x2");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe1_x3("fifo_B_pe1_x3");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe2_x0("fifo_B_pe2_x0");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe2_x1("fifo_B_pe2_x1");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe2_x2("fifo_B_pe2_x2");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe2_x3("fifo_B_pe2_x3");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe3_x0("fifo_B_pe3_x0");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe3_x1("fifo_B_pe3_x1");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe3_x2("fifo_B_pe3_x2");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe3_x3("fifo_B_pe3_x3");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe4_x0("fifo_B_pe4_x0");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe4_x1("fifo_B_pe4_x1");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe4_x2("fifo_B_pe4_x2");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe4_x3("fifo_B_pe4_x3");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe5_x0("fifo_B_pe5_x0");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe5_x1("fifo_B_pe5_x1");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe5_x2("fifo_B_pe5_x2");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe5_x3("fifo_B_pe5_x3");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe6_x0("fifo_B_pe6_x0");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe6_x1("fifo_B_pe6_x1");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe6_x2("fifo_B_pe6_x2");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe6_x3("fifo_B_pe6_x3");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe7_x0("fifo_B_pe7_x0");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe7_x1("fifo_B_pe7_x1");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe7_x2("fifo_B_pe7_x2");
-	tapa::stream<ap_uint<512>, 8> fifo_B_pe7_x3("fifo_B_pe7_x3");
-
-	tapa::stream<ap_uint<512>, 8> fifo_C_pe0("fifo_C_pe0");
-	tapa::stream<ap_uint<512>, 8> fifo_C_pe1("fifo_C_pe1");
-	tapa::stream<ap_uint<512>, 8> fifo_C_pe2("fifo_C_pe2");
-	tapa::stream<ap_uint<512>, 8> fifo_C_pe3("fifo_C_pe3");
-	tapa::stream<ap_uint<512>, 8> fifo_C_pe4("fifo_C_pe4");
-	tapa::stream<ap_uint<512>, 8> fifo_C_pe5("fifo_C_pe5");
-	tapa::stream<ap_uint<512>, 8> fifo_C_pe6("fifo_C_pe6");
-	tapa::stream<ap_uint<512>, 8> fifo_C_pe7("fifo_C_pe7");
-
-	tapa::stream<ap_uint<512>, 8> fifo_C_read_in0("fifo_C_read_in0");
-	tapa::stream<ap_uint<512>, 8> fifo_C_read_in1("fifo_C_read_in1");
-	tapa::stream<ap_uint<512>, 8> fifo_C_read_in2("fifo_C_read_in2");
-	tapa::stream<ap_uint<512>, 8> fifo_C_read_in3("fifo_C_read_in3");
-	tapa::stream<ap_uint<512>, 8> fifo_C_read_in4("fifo_C_read_in4");
-	tapa::stream<ap_uint<512>, 8> fifo_C_read_in5("fifo_C_read_in5");
-	tapa::stream<ap_uint<512>, 8> fifo_C_read_in6("fifo_C_read_in6");
-	tapa::stream<ap_uint<512>, 8> fifo_C_read_in7("fifo_C_read_in7");
-
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch0_result("fifo_C_ch0_result");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch1_result("fifo_C_ch1_result");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch2_result("fifo_C_ch2_result");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch3_result("fifo_C_ch3_result");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch4_result("fifo_C_ch4_result");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch5_result("fifo_C_ch5_result");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch6_result("fifo_C_ch6_result");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch7_result("fifo_C_ch7_result");
-
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch0("fifo_C_ch0");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch1("fifo_C_ch1");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch2("fifo_C_ch2");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch3("fifo_C_ch3");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch4("fifo_C_ch4");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch5("fifo_C_ch5");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch6("fifo_C_ch6");
-	tapa::stream<ap_uint<512>, 8> fifo_C_ch7("fifo_C_ch7");
-
-	read_edge_list_ptr(
+	tapa::task()
+	.invoke(read_edge_list_ptr,
 		NUM_ITE,
 		M,
 		P_N,
@@ -2169,369 +2007,60 @@ void sextans(
 		alpha_u,
 		beta_u,
 		edge_list_ptr,
-		fifo_edge_list_ptr_pe0
-		);
+		fifo_edge_list_ptr_pe
+		)
 
-	read_A<0>(
-		edge_list_ch0,
-		fifo_A_pe0,
+	.invoke<tapa::join, NUM_CH_SPARSE>(read_A,
+		edge_list_ch,
+		fifo_A_pe,
 		NUM_A_LEN,
 		P_N
-		);
+		)
 
-	read_A<1>(
-		edge_list_ch1,
-		fifo_A_pe1,
-		NUM_A_LEN,
-		P_N
-		);
-
-	read_A<2>(
-		edge_list_ch2,
-		fifo_A_pe2,
-		NUM_A_LEN,
-		P_N
-		);
-
-	read_A<3>(
-		edge_list_ch3,
-		fifo_A_pe3,
-		NUM_A_LEN,
-		P_N
-		);
-
-	read_A<4>(
-		edge_list_ch4,
-		fifo_A_pe4,
-		NUM_A_LEN,
-		P_N
-		);
-
-	read_A<5>(
-		edge_list_ch5,
-		fifo_A_pe5,
-		NUM_A_LEN,
-		P_N
-		);
-
-	read_A<6>(
-		edge_list_ch6,
-		fifo_A_pe6,
-		NUM_A_LEN,
-		P_N
-		);
-
-	read_A<7>(
-		edge_list_ch7,
-		fifo_A_pe7,
-		NUM_A_LEN,
-		P_N
-		);
-
-	read_B<0>(
-		mat_B_ch0,
-		fifo_B_pe0_x0,
+	.invoke<tapa::join, NUM_CH_B>(read_B,
+		mat_B_ch,
+		fifo_B_pe_x,
 		K,
 		P_N
-		);
+		)
 
-	read_B<1>(
-		mat_B_ch1,
-		fifo_B_pe0_x1,
-		K,
-		P_N
-		);
+	.invoke<tapa::join, NUM_CH_SPARSE - 1>(PEG,
+		fifo_edge_list_ptr_pe,
+		fifo_A_pe,
+		fifo_B_pe_x,
+		fifo_edge_list_ptr_pe,
+		fifo_B_pe_x,
+		fifo_C_pe
+		)
 
-	read_B<2>(
-		mat_B_ch2,
-		fifo_B_pe0_x2,
-		K,
-		P_N
-		);
+	.invoke(PEG_last,
+		fifo_edge_list_ptr_pe,
+		fifo_A_pe,
+		fifo_B_pe_x,
+		fifo_C_pe
+		)
 
-	read_B<3>(
-		mat_B_ch3,
-		fifo_B_pe0_x3,
-		K,
-		P_N
-		);
+	.invoke(C_collect,
+		fifo_C_pe,
+		fifo_C_ch_result
+		)
 
-	PEG<0>(
-		fifo_edge_list_ptr_pe0,
-		fifo_A_pe0,
-		fifo_B_pe0_x0,
-		fifo_B_pe0_x1,
-		fifo_B_pe0_x2,
-		fifo_B_pe0_x3,
-		fifo_edge_list_ptr_pe1,
-		fifo_B_pe1_x0,
-		fifo_B_pe1_x1,
-		fifo_B_pe1_x2,
-		fifo_B_pe1_x3,
-		fifo_C_pe0
-		);
-
-	PEG<1>(
-		fifo_edge_list_ptr_pe1,
-		fifo_A_pe1,
-		fifo_B_pe1_x0,
-		fifo_B_pe1_x1,
-		fifo_B_pe1_x2,
-		fifo_B_pe1_x3,
-		fifo_edge_list_ptr_pe2,
-		fifo_B_pe2_x0,
-		fifo_B_pe2_x1,
-		fifo_B_pe2_x2,
-		fifo_B_pe2_x3,
-		fifo_C_pe1
-		);
-
-	PEG<2>(
-		fifo_edge_list_ptr_pe2,
-		fifo_A_pe2,
-		fifo_B_pe2_x0,
-		fifo_B_pe2_x1,
-		fifo_B_pe2_x2,
-		fifo_B_pe2_x3,
-		fifo_edge_list_ptr_pe3,
-		fifo_B_pe3_x0,
-		fifo_B_pe3_x1,
-		fifo_B_pe3_x2,
-		fifo_B_pe3_x3,
-		fifo_C_pe2
-		);
-
-	PEG<3>(
-		fifo_edge_list_ptr_pe3,
-		fifo_A_pe3,
-		fifo_B_pe3_x0,
-		fifo_B_pe3_x1,
-		fifo_B_pe3_x2,
-		fifo_B_pe3_x3,
-		fifo_edge_list_ptr_pe4,
-		fifo_B_pe4_x0,
-		fifo_B_pe4_x1,
-		fifo_B_pe4_x2,
-		fifo_B_pe4_x3,
-		fifo_C_pe3
-		);
-
-	PEG<4>(
-		fifo_edge_list_ptr_pe4,
-		fifo_A_pe4,
-		fifo_B_pe4_x0,
-		fifo_B_pe4_x1,
-		fifo_B_pe4_x2,
-		fifo_B_pe4_x3,
-		fifo_edge_list_ptr_pe5,
-		fifo_B_pe5_x0,
-		fifo_B_pe5_x1,
-		fifo_B_pe5_x2,
-		fifo_B_pe5_x3,
-		fifo_C_pe4
-		);
-
-	PEG<5>(
-		fifo_edge_list_ptr_pe5,
-		fifo_A_pe5,
-		fifo_B_pe5_x0,
-		fifo_B_pe5_x1,
-		fifo_B_pe5_x2,
-		fifo_B_pe5_x3,
-		fifo_edge_list_ptr_pe6,
-		fifo_B_pe6_x0,
-		fifo_B_pe6_x1,
-		fifo_B_pe6_x2,
-		fifo_B_pe6_x3,
-		fifo_C_pe5
-		);
-
-	PEG<6>(
-		fifo_edge_list_ptr_pe6,
-		fifo_A_pe6,
-		fifo_B_pe6_x0,
-		fifo_B_pe6_x1,
-		fifo_B_pe6_x2,
-		fifo_B_pe6_x3,
-		fifo_edge_list_ptr_pe7,
-		fifo_B_pe7_x0,
-		fifo_B_pe7_x1,
-		fifo_B_pe7_x2,
-		fifo_B_pe7_x3,
-		fifo_C_pe6
-		);
-
-	PEG_last<7>(
-		fifo_edge_list_ptr_pe7,
-		fifo_A_pe7,
-		fifo_B_pe7_x0,
-		fifo_B_pe7_x1,
-		fifo_B_pe7_x2,
-		fifo_B_pe7_x3,
-		fifo_C_pe7
-		);
-
-    C_collect<0>(
-		fifo_C_pe0,
-		fifo_C_pe1,
-		fifo_C_pe2,
-		fifo_C_pe3,
-		fifo_C_pe4,
-		fifo_C_pe5,
-		fifo_C_pe6,
-		fifo_C_pe7,
-
-		fifo_C_ch0_result,
-		fifo_C_ch1_result,
-		fifo_C_ch2_result,
-		fifo_C_ch3_result,
-		fifo_C_ch4_result,
-		fifo_C_ch5_result,
-		fifo_C_ch6_result,
-		fifo_C_ch7_result
-		);
-
-	read_C<0>(
-		mat_C_ch0_in,
-		fifo_C_read_in0,
+	.invoke<tapa::join, NUM_CH_C>(read_C,
+		mat_C_ch_in,
+		fifo_C_read_in,
 		M,
 		P_N
-		);
+		)
 
-	read_C<1>(
-		mat_C_ch1_in,
-		fifo_C_read_in1,
-		M,
-		P_N
-		);
+	.invoke<tapa::join, NUM_CH_C>(comp_C,
+		fifo_C_read_in,
+		fifo_C_ch_result,
+		fifo_C_ch
+		)
 
-	read_C<2>(
-		mat_C_ch2_in,
-		fifo_C_read_in2,
-		M,
-		P_N
-		);
-
-	read_C<3>(
-		mat_C_ch3_in,
-		fifo_C_read_in3,
-		M,
-		P_N
-		);
-
-	read_C<4>(
-		mat_C_ch4_in,
-		fifo_C_read_in4,
-		M,
-		P_N
-		);
-
-	read_C<5>(
-		mat_C_ch5_in,
-		fifo_C_read_in5,
-		M,
-		P_N
-		);
-
-	read_C<6>(
-		mat_C_ch6_in,
-		fifo_C_read_in6,
-		M,
-		P_N
-		);
-
-	read_C<7>(
-		mat_C_ch7_in,
-		fifo_C_read_in7,
-		M,
-		P_N
-		);
-
-	comp_C<0>(
-		fifo_C_read_in0,
-		fifo_C_ch0_result,
-		fifo_C_ch0
-		);
-
-	comp_C<1>(
-		fifo_C_read_in1,
-		fifo_C_ch1_result,
-		fifo_C_ch1
-		);
-
-	comp_C<2>(
-		fifo_C_read_in2,
-		fifo_C_ch2_result,
-		fifo_C_ch2
-		);
-
-	comp_C<3>(
-		fifo_C_read_in3,
-		fifo_C_ch3_result,
-		fifo_C_ch3
-		);
-
-	comp_C<4>(
-		fifo_C_read_in4,
-		fifo_C_ch4_result,
-		fifo_C_ch4
-		);
-
-	comp_C<5>(
-		fifo_C_read_in5,
-		fifo_C_ch5_result,
-		fifo_C_ch5
-		);
-
-	comp_C<6>(
-		fifo_C_read_in6,
-		fifo_C_ch6_result,
-		fifo_C_ch6
-		);
-
-	comp_C<7>(
-		fifo_C_read_in7,
-		fifo_C_ch7_result,
-		fifo_C_ch7
-		);
-
-	write_C<0>(
-		fifo_C_ch0,
-		mat_C_ch0
-		);
-
-	write_C<1>(
-		fifo_C_ch1,
-		mat_C_ch1
-		);
-
-	write_C<2>(
-		fifo_C_ch2,
-		mat_C_ch2
-		);
-
-	write_C<3>(
-		fifo_C_ch3,
-		mat_C_ch3
-		);
-
-	write_C<4>(
-		fifo_C_ch4,
-		mat_C_ch4
-		);
-
-	write_C<5>(
-		fifo_C_ch5,
-		mat_C_ch5
-		);
-
-	write_C<6>(
-		fifo_C_ch6,
-		mat_C_ch6
-		);
-
-	write_C<7>(
-		fifo_C_ch7,
-		mat_C_ch7
-		);
+	.invoke<tapa::join, NUM_CH_C>(write_C,
+		fifo_C_ch,
+		mat_C_ch
+		)
+	;
 }
