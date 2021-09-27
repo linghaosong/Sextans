@@ -110,7 +110,7 @@ void PU2core(
     float a_val_f,
     float b_val_d0_f,
     float b_val_d1_f,
-    ap_uint<64> * local_C_pe0_d0_d1
+    ap_uint<64> local_C_pe0_d0_d1[URAM_DEPTH]
     ) {
 #pragma HLS inline
     ap_uint<64> c_val_d0_d1_u64 = local_C_pe0_d0_d1[addr_c];
@@ -250,13 +250,7 @@ void PEG(
 #pragma HLS array_partition variable=local_B complete dim=2
 #pragma HLS array_partition variable=local_B cyclic factor=B_PARTITION_FACTOR dim=3
 
-			ap_uint<32> start_32;
-			bool start_32_ready = false;
-			w1: while(!start_32_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline II=1
-				start_32_ready = fifo_inst.try_read(start_32);
-			};
+			auto start_32 = fifo_inst.read();
 
 			fifo_inst_out.write(start_32);
 
@@ -295,13 +289,7 @@ void PEG(
 				}
 
 				// computation
-				ap_uint<32> end_32;
-				bool end_32_ready = false;
-				w2: while(!end_32_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline II=1
-					end_32_ready = fifo_inst.try_read(end_32);
-				};
+				const auto end_32 = fifo_inst.read();
 
 				fifo_inst_out.write(end_32);
 
@@ -469,13 +457,7 @@ void PEG_last(
 #pragma HLS array_partition variable=local_B complete dim=2
 #pragma HLS array_partition variable=local_B cyclic factor=B_PARTITION_FACTOR dim=3
 
-			ap_uint<32> start_32;
-			bool start_32_ready = false;
-			w1: while(!start_32_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline II=1
-				start_32_ready = fifo_inst.try_read(start_32);
-			};
+			auto start_32 = fifo_inst.read();
 
 			main: for (ap_uint<32> i = 0; i < NUM_ITE; ++i) {
 #pragma HLS loop_tripcount min=1 max=49
@@ -511,13 +493,7 @@ void PEG_last(
 				}
 
 				// computation
-				ap_uint<32> end_32;
-				bool end_32_ready = false;
-				w2: while(!end_32_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline II=1
-					end_32_ready = fifo_inst.try_read(end_32);
-				};
+				const auto end_32 = fifo_inst.read();
 
 				computation: for (ap_uint<32> j = start_32; j < end_32; ) {
 #pragma HLS loop_tripcount min=1 max=200
@@ -612,13 +588,7 @@ void C_collect(
     tapa::istreams<ap_uint<512>, NUM_CH_SPARSE> & fifo_C_in,
     tapa::ostreams<ap_uint<512>, NUM_CH_C> & fifo_C_out
     ) {
-    ap_uint<512> MN512;
-    bool M512_ready = false;
-    w_Mxx: while(!M512_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline II=1
-        M512_ready = fifo_C_in[7].try_read(MN512);
-    };
+    const auto MN512 = fifo_C_in[NUM_CH_SPARSE-1].read();
     ap_uint<32> M = MN512(31, 0);
     ap_uint<32> P_N = MN512(63, 32);
 
@@ -663,13 +633,7 @@ void write_C(
 	tapa::istream<ap_uint<512>> & fifo_C,
 	tapa::mmap<ap_uint<512>> C_out
 	) {
-	ap_uint<512> M_u512;
-	bool M_ready = false;
-	w_M: while(!M_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline II=1
-		M_ready = fifo_C.try_read(M_u512);
-	};
+	const auto M_u512 = fifo_C.read();
 	ap_uint<32> M = M_u512(31, 0);
 	ap_uint<32> P_N = M_u512(63, 32);
 
@@ -718,13 +682,7 @@ void comp_C(
 	tapa::istream<ap_uint<512>> & fifo_C_pe_in,
 	tapa::ostream<ap_uint<512>> & fifo_C_out
 	) {
-	bool M_ready = false;
-	ap_uint<512> M512;
-	w_Mxx: while(!M_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline II=1
-		M_ready = fifo_C_pe_in.try_read(M512);
-	};
+	const auto M512 = fifo_C_pe_in.read();
 	fifo_C_out.write(M512);
 	ap_uint<32> M = M512(31, 0);
 	ap_uint<32> P_N = M512(63, 32);
