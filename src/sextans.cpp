@@ -138,33 +138,21 @@ void PEcore(
     ap_uint<14> & addr_b,
     ap_uint<18> & addr_c,
     ap_uint<32> & a_val_u,
-
-    ap_uint<64> * local_C_pe0_d0_d1,
-    ap_uint<64> * local_C_pe0_d2_d3,
-    ap_uint<64> * local_C_pe0_d4_d5,
-    ap_uint<64> * local_C_pe0_d6_d7,
-
-    ap_uint<32> * local_B_pe0_pe1_d0,
-    ap_uint<32> * local_B_pe0_pe1_d1,
-    ap_uint<32> * local_B_pe0_pe1_d2,
-    ap_uint<32> * local_B_pe0_pe1_d3,
-    ap_uint<32> * local_B_pe0_pe1_d4,
-    ap_uint<32> * local_B_pe0_pe1_d5,
-    ap_uint<32> * local_B_pe0_pe1_d6,
-    ap_uint<32> * local_B_pe0_pe1_d7
+    ap_uint<64> local_C[NUM_CH_C / 2][URAM_DEPTH],
+		ap_uint<32> local_B[8][WINDOW_SIZE]
     ) {
 #pragma HLS inline
     if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
         float a_val_f = tapa::bit_cast<float>(a_val_u);
 
-        ap_uint<32> b_val_d0_u = local_B_pe0_pe1_d0[addr_b];
-        ap_uint<32> b_val_d1_u = local_B_pe0_pe1_d1[addr_b];
-        ap_uint<32> b_val_d2_u = local_B_pe0_pe1_d2[addr_b];
-        ap_uint<32> b_val_d3_u = local_B_pe0_pe1_d3[addr_b];
-        ap_uint<32> b_val_d4_u = local_B_pe0_pe1_d4[addr_b];
-        ap_uint<32> b_val_d5_u = local_B_pe0_pe1_d5[addr_b];
-        ap_uint<32> b_val_d6_u = local_B_pe0_pe1_d6[addr_b];
-        ap_uint<32> b_val_d7_u = local_B_pe0_pe1_d7[addr_b];
+        ap_uint<32> b_val_d0_u = local_B[0][addr_b];
+        ap_uint<32> b_val_d1_u = local_B[1][addr_b];
+        ap_uint<32> b_val_d2_u = local_B[2][addr_b];
+        ap_uint<32> b_val_d3_u = local_B[3][addr_b];
+        ap_uint<32> b_val_d4_u = local_B[4][addr_b];
+        ap_uint<32> b_val_d5_u = local_B[5][addr_b];
+        ap_uint<32> b_val_d6_u = local_B[6][addr_b];
+        ap_uint<32> b_val_d7_u = local_B[7][addr_b];
 
         float b_val_d0_f = tapa::bit_cast<float>(b_val_d0_u);
         float b_val_d1_f = tapa::bit_cast<float>(b_val_d1_u);
@@ -180,7 +168,7 @@ void PEcore(
             a_val_f,
             b_val_d0_f,
             b_val_d1_f,
-            local_C_pe0_d0_d1
+            local_C[0]
             );
 
         PU2core(
@@ -188,7 +176,7 @@ void PEcore(
             a_val_f,
             b_val_d2_f,
             b_val_d3_f,
-            local_C_pe0_d2_d3
+            local_C[1]
             );
 
         PU2core(
@@ -196,7 +184,7 @@ void PEcore(
             a_val_f,
             b_val_d4_f,
             b_val_d5_f,
-            local_C_pe0_d4_d5
+            local_C[2]
             );
 
         PU2core(
@@ -204,7 +192,7 @@ void PEcore(
             a_val_f,
             b_val_d6_f,
             b_val_d7_f,
-            local_C_pe0_d6_d7
+            local_C[3]
             );
     }
 }
@@ -297,113 +285,11 @@ void PEG(
 			}
 			//define local B buffer and pragma local B buffer if partition factor > 1
 
-			ap_uint<32> local_B_pe0_pe1_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d7[WINDOW_SIZE];
-
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d0 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d1 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d2 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d3 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d4 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d5 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d6 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe0_pe1_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe2_pe3_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d7[WINDOW_SIZE];
-
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d0 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d1 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d2 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d3 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d4 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d5 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d6 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe2_pe3_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe4_pe5_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d7[WINDOW_SIZE];
-
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d0 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d1 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d2 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d3 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d4 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d5 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d6 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe4_pe5_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe6_pe7_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d7[WINDOW_SIZE];
-
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d0 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d1 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d2 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d3 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d4 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d5 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d6 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe6_pe7_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d7 cyclic factor=B_PARTITION_FACTOR
+			ap_uint<32> local_B[8/2][8][WINDOW_SIZE];
+#pragma HLS bind_storage variable=local_B latency=3
+#pragma HLS array_partition variable=local_B complete dim=1
+#pragma HLS array_partition variable=local_B complete dim=2
+#pragma HLS array_partition variable=local_B cyclic factor=B_PARTITION_FACTOR dim=3
 
 			ap_uint<32> start_32;
 			bool start_32_ready = false;
@@ -468,41 +354,41 @@ void PEG(
 							ap_uint<32> b_pe_d6 = b_512_x3_delay(31 + k * 32 +   0,  k * 32 +   0);
 							ap_uint<32> b_pe_d7 = b_512_x3_delay(31 + k * 32 + 256,  k * 32 + 256);
 
-							local_B_pe0_pe1_d0[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B_pe0_pe1_d1[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B_pe0_pe1_d2[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B_pe0_pe1_d3[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B_pe0_pe1_d4[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B_pe0_pe1_d5[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B_pe0_pe1_d6[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B_pe0_pe1_d7[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+							local_B[0][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
+							local_B[0][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
+							local_B[0][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
+							local_B[0][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
+							local_B[0][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
+							local_B[0][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
+							local_B[0][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
+							local_B[0][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
 
-							local_B_pe2_pe3_d0[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B_pe2_pe3_d1[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B_pe2_pe3_d2[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B_pe2_pe3_d3[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B_pe2_pe3_d4[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B_pe2_pe3_d5[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B_pe2_pe3_d6[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B_pe2_pe3_d7[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+							local_B[1][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
+							local_B[1][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
+							local_B[1][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
+							local_B[1][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
+							local_B[1][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
+							local_B[1][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
+							local_B[1][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
+							local_B[1][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
 
-							local_B_pe4_pe5_d0[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B_pe4_pe5_d1[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B_pe4_pe5_d2[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B_pe4_pe5_d3[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B_pe4_pe5_d4[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B_pe4_pe5_d5[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B_pe4_pe5_d6[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B_pe4_pe5_d7[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+							local_B[2][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
+							local_B[2][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
+							local_B[2][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
+							local_B[2][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
+							local_B[2][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
+							local_B[2][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
+							local_B[2][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
+							local_B[2][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
 
-							local_B_pe6_pe7_d0[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B_pe6_pe7_d1[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B_pe6_pe7_d2[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B_pe6_pe7_d3[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B_pe6_pe7_d4[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B_pe6_pe7_d5[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B_pe6_pe7_d6[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B_pe6_pe7_d7[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+							local_B[3][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
+							local_B[3][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
+							local_B[3][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
+							local_B[3][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
+							local_B[3][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
+							local_B[3][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
+							local_B[3][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
+							local_B[3][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
 						}
 						b_512_x0_ready = false;
 						b_512_x1_ready = false;
@@ -557,149 +443,15 @@ void PEG(
 						}
 
 						// PE process
-						PEcore(
-							a_col[0],
-							a_row[0],
-							a_val[0],
-							local_C[0][0],
-							local_C[0][1],
-							local_C[0][2],
-							local_C[0][3],
-							local_B_pe0_pe1_d0,
-							local_B_pe0_pe1_d1,
-							local_B_pe0_pe1_d2,
-							local_B_pe0_pe1_d3,
-							local_B_pe0_pe1_d4,
-							local_B_pe0_pe1_d5,
-							local_B_pe0_pe1_d6,
-							local_B_pe0_pe1_d7
-							);
-
-						PEcore(
-							a_col[1],
-							a_row[1],
-							a_val[1],
-							local_C[1][0],
-							local_C[1][1],
-							local_C[1][2],
-							local_C[1][3],
-							local_B_pe0_pe1_d0,
-							local_B_pe0_pe1_d1,
-							local_B_pe0_pe1_d2,
-							local_B_pe0_pe1_d3,
-							local_B_pe0_pe1_d4,
-							local_B_pe0_pe1_d5,
-							local_B_pe0_pe1_d6,
-							local_B_pe0_pe1_d7
-							);
-
-						PEcore(
-							a_col[2],
-							a_row[2],
-							a_val[2],
-							local_C[2][0],
-							local_C[2][1],
-							local_C[2][2],
-							local_C[2][3],
-							local_B_pe2_pe3_d0,
-							local_B_pe2_pe3_d1,
-							local_B_pe2_pe3_d2,
-							local_B_pe2_pe3_d3,
-							local_B_pe2_pe3_d4,
-							local_B_pe2_pe3_d5,
-							local_B_pe2_pe3_d6,
-							local_B_pe2_pe3_d7
-							);
-
-						PEcore(
-							a_col[3],
-							a_row[3],
-							a_val[3],
-							local_C[3][0],
-							local_C[3][1],
-							local_C[3][2],
-							local_C[3][3],
-							local_B_pe2_pe3_d0,
-							local_B_pe2_pe3_d1,
-							local_B_pe2_pe3_d2,
-							local_B_pe2_pe3_d3,
-							local_B_pe2_pe3_d4,
-							local_B_pe2_pe3_d5,
-							local_B_pe2_pe3_d6,
-							local_B_pe2_pe3_d7
-							);
-
-						PEcore(
-							a_col[4],
-							a_row[4],
-							a_val[4],
-							local_C[4][0],
-							local_C[4][1],
-							local_C[4][2],
-							local_C[4][3],
-							local_B_pe4_pe5_d0,
-							local_B_pe4_pe5_d1,
-							local_B_pe4_pe5_d2,
-							local_B_pe4_pe5_d3,
-							local_B_pe4_pe5_d4,
-							local_B_pe4_pe5_d5,
-							local_B_pe4_pe5_d6,
-							local_B_pe4_pe5_d7
-							);
-
-						PEcore(
-							a_col[5],
-							a_row[5],
-							a_val[5],
-							local_C[5][0],
-							local_C[5][1],
-							local_C[5][2],
-							local_C[5][3],
-							local_B_pe4_pe5_d0,
-							local_B_pe4_pe5_d1,
-							local_B_pe4_pe5_d2,
-							local_B_pe4_pe5_d3,
-							local_B_pe4_pe5_d4,
-							local_B_pe4_pe5_d5,
-							local_B_pe4_pe5_d6,
-							local_B_pe4_pe5_d7
-							);
-
-						PEcore(
-							a_col[6],
-							a_row[6],
-							a_val[6],
-							local_C[6][0],
-							local_C[6][1],
-							local_C[6][2],
-							local_C[6][3],
-							local_B_pe6_pe7_d0,
-							local_B_pe6_pe7_d1,
-							local_B_pe6_pe7_d2,
-							local_B_pe6_pe7_d3,
-							local_B_pe6_pe7_d4,
-							local_B_pe6_pe7_d5,
-							local_B_pe6_pe7_d6,
-							local_B_pe6_pe7_d7
-							);
-
-						PEcore(
-							a_col[7],
-							a_row[7],
-							a_val[7],
-							local_C[7][0],
-							local_C[7][1],
-							local_C[7][2],
-							local_C[7][3],
-							local_B_pe6_pe7_d0,
-							local_B_pe6_pe7_d1,
-							local_B_pe6_pe7_d2,
-							local_B_pe6_pe7_d3,
-							local_B_pe6_pe7_d4,
-							local_B_pe6_pe7_d5,
-							local_B_pe6_pe7_d6,
-							local_B_pe6_pe7_d7
-							);
+						for (int l = 0; l < NUM_CH_SPARSE; ++l) {
+							PEcore(
+								a_col[l],
+								a_row[l],
+								a_val[l],
+								local_C[l],
+								local_B[l/2]
+								);
+						}
 
 						++j;
 					}
@@ -815,113 +567,11 @@ void PEG_last(
 			}
 			//define local B buffer and pragma local B buffer if partition factor > 1
 
-			ap_uint<32> local_B_pe0_pe1_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d7[WINDOW_SIZE];
-
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d0 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d1 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d2 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d3 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d4 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d5 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d6 latency=3
-#pragma HLS bind_storage variable=local_B_pe0_pe1_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe0_pe1_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe2_pe3_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d7[WINDOW_SIZE];
-
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d0 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d1 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d2 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d3 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d4 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d5 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d6 latency=3
-#pragma HLS bind_storage variable=local_B_pe2_pe3_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe2_pe3_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe4_pe5_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d7[WINDOW_SIZE];
-
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d0 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d1 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d2 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d3 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d4 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d5 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d6 latency=3
-#pragma HLS bind_storage variable=local_B_pe4_pe5_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe4_pe5_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe6_pe7_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d7[WINDOW_SIZE];
-
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d0 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d1 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d2 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d3 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d4 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d5 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d6 latency=3
-#pragma HLS bind_storage variable=local_B_pe6_pe7_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe6_pe7_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d7 cyclic factor=B_PARTITION_FACTOR
+			ap_uint<32> local_B[8/2][8][WINDOW_SIZE];
+#pragma HLS bind_storage variable=local_B latency=3
+#pragma HLS array_partition variable=local_B complete dim=1
+#pragma HLS array_partition variable=local_B complete dim=2
+#pragma HLS array_partition variable=local_B cyclic factor=B_PARTITION_FACTOR dim=3
 
 			ap_uint<32> start_32;
 			bool start_32_ready = false;
@@ -980,41 +630,41 @@ void PEG_last(
 							ap_uint<32> b_pe_d6 = b_512_x3_delay(31 + k * 32 +   0,  k * 32 +   0);
 							ap_uint<32> b_pe_d7 = b_512_x3_delay(31 + k * 32 + 256,  k * 32 + 256);
 
-							local_B_pe0_pe1_d0[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B_pe0_pe1_d1[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B_pe0_pe1_d2[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B_pe0_pe1_d3[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B_pe0_pe1_d4[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B_pe0_pe1_d5[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B_pe0_pe1_d6[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B_pe0_pe1_d7[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+							local_B[0][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
+							local_B[0][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
+							local_B[0][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
+							local_B[0][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
+							local_B[0][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
+							local_B[0][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
+							local_B[0][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
+							local_B[0][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
 
-							local_B_pe2_pe3_d0[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B_pe2_pe3_d1[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B_pe2_pe3_d2[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B_pe2_pe3_d3[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B_pe2_pe3_d4[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B_pe2_pe3_d5[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B_pe2_pe3_d6[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B_pe2_pe3_d7[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+							local_B[1][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
+							local_B[1][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
+							local_B[1][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
+							local_B[1][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
+							local_B[1][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
+							local_B[1][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
+							local_B[1][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
+							local_B[1][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
 
-							local_B_pe4_pe5_d0[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B_pe4_pe5_d1[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B_pe4_pe5_d2[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B_pe4_pe5_d3[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B_pe4_pe5_d4[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B_pe4_pe5_d5[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B_pe4_pe5_d6[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B_pe4_pe5_d7[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+							local_B[2][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
+							local_B[2][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
+							local_B[2][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
+							local_B[2][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
+							local_B[2][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
+							local_B[2][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
+							local_B[2][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
+							local_B[2][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
 
-							local_B_pe6_pe7_d0[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B_pe6_pe7_d1[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B_pe6_pe7_d2[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B_pe6_pe7_d3[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B_pe6_pe7_d4[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B_pe6_pe7_d5[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B_pe6_pe7_d6[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B_pe6_pe7_d7[tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+							local_B[3][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
+							local_B[3][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
+							local_B[3][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
+							local_B[3][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
+							local_B[3][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
+							local_B[3][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
+							local_B[3][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
+							local_B[3][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
 						}
 						b_512_x0_ready = false;
 						b_512_x1_ready = false;
@@ -1067,149 +717,15 @@ void PEG_last(
 						}
 
 						// PE process
-						PEcore(
-							a_col[0],
-							a_row[0],
-							a_val[0],
-							local_C[0][0],
-							local_C[0][1],
-							local_C[0][2],
-							local_C[0][3],
-							local_B_pe0_pe1_d0,
-							local_B_pe0_pe1_d1,
-							local_B_pe0_pe1_d2,
-							local_B_pe0_pe1_d3,
-							local_B_pe0_pe1_d4,
-							local_B_pe0_pe1_d5,
-							local_B_pe0_pe1_d6,
-							local_B_pe0_pe1_d7
-							);
-
-						PEcore(
-							a_col[1],
-							a_row[1],
-							a_val[1],
-							local_C[1][0],
-							local_C[1][1],
-							local_C[1][2],
-							local_C[1][3],
-							local_B_pe0_pe1_d0,
-							local_B_pe0_pe1_d1,
-							local_B_pe0_pe1_d2,
-							local_B_pe0_pe1_d3,
-							local_B_pe0_pe1_d4,
-							local_B_pe0_pe1_d5,
-							local_B_pe0_pe1_d6,
-							local_B_pe0_pe1_d7
-							);
-
-						PEcore(
-							a_col[2],
-							a_row[2],
-							a_val[2],
-							local_C[2][0],
-							local_C[2][1],
-							local_C[2][2],
-							local_C[2][3],
-							local_B_pe2_pe3_d0,
-							local_B_pe2_pe3_d1,
-							local_B_pe2_pe3_d2,
-							local_B_pe2_pe3_d3,
-							local_B_pe2_pe3_d4,
-							local_B_pe2_pe3_d5,
-							local_B_pe2_pe3_d6,
-							local_B_pe2_pe3_d7
-							);
-
-						PEcore(
-							a_col[3],
-							a_row[3],
-							a_val[3],
-							local_C[3][0],
-							local_C[3][1],
-							local_C[3][2],
-							local_C[3][3],
-							local_B_pe2_pe3_d0,
-							local_B_pe2_pe3_d1,
-							local_B_pe2_pe3_d2,
-							local_B_pe2_pe3_d3,
-							local_B_pe2_pe3_d4,
-							local_B_pe2_pe3_d5,
-							local_B_pe2_pe3_d6,
-							local_B_pe2_pe3_d7
-							);
-
-						PEcore(
-							a_col[4],
-							a_row[4],
-							a_val[4],
-							local_C[4][0],
-							local_C[4][1],
-							local_C[4][2],
-							local_C[4][3],
-							local_B_pe4_pe5_d0,
-							local_B_pe4_pe5_d1,
-							local_B_pe4_pe5_d2,
-							local_B_pe4_pe5_d3,
-							local_B_pe4_pe5_d4,
-							local_B_pe4_pe5_d5,
-							local_B_pe4_pe5_d6,
-							local_B_pe4_pe5_d7
-							);
-
-						PEcore(
-							a_col[5],
-							a_row[5],
-							a_val[5],
-							local_C[5][0],
-							local_C[5][1],
-							local_C[5][2],
-							local_C[5][3],
-							local_B_pe4_pe5_d0,
-							local_B_pe4_pe5_d1,
-							local_B_pe4_pe5_d2,
-							local_B_pe4_pe5_d3,
-							local_B_pe4_pe5_d4,
-							local_B_pe4_pe5_d5,
-							local_B_pe4_pe5_d6,
-							local_B_pe4_pe5_d7
-							);
-
-						PEcore(
-							a_col[6],
-							a_row[6],
-							a_val[6],
-							local_C[6][0],
-							local_C[6][1],
-							local_C[6][2],
-							local_C[6][3],
-							local_B_pe6_pe7_d0,
-							local_B_pe6_pe7_d1,
-							local_B_pe6_pe7_d2,
-							local_B_pe6_pe7_d3,
-							local_B_pe6_pe7_d4,
-							local_B_pe6_pe7_d5,
-							local_B_pe6_pe7_d6,
-							local_B_pe6_pe7_d7
-							);
-
-						PEcore(
-							a_col[7],
-							a_row[7],
-							a_val[7],
-							local_C[7][0],
-							local_C[7][1],
-							local_C[7][2],
-							local_C[7][3],
-							local_B_pe6_pe7_d0,
-							local_B_pe6_pe7_d1,
-							local_B_pe6_pe7_d2,
-							local_B_pe6_pe7_d3,
-							local_B_pe6_pe7_d4,
-							local_B_pe6_pe7_d5,
-							local_B_pe6_pe7_d6,
-							local_B_pe6_pe7_d7
-							);
+						for (int l = 0; l < NUM_CH_SPARSE; ++l) {
+							PEcore(
+								a_col[l],
+								a_row[l],
+								a_val[l],
+								local_C[l],
+								local_B[l/2]
+								);
+						}
 
 						++j;
 					}
