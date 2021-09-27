@@ -19,7 +19,7 @@ void read_edge_list_ptr(
 	const ap_uint<32> K_in,
 	const ap_uint<32> alpha_u_in,
 	const ap_uint<32> beta_u_in,
-	tapa::mmap<const ap_uint<32>> edge_list_ptr,
+	tapa::mmap<ap_uint<32>> edge_list_ptr,
 	tapa::ostream<ap_uint<32>> & fifo_edge_list_ptr
 	) {
 	const ap_uint<32> num_ite = num_ite_in;
@@ -57,7 +57,7 @@ void read_edge_list_ptr(
 }
 
 void read_A(
-	tapa::mmap<const ap_uint<512>> A,
+	tapa::async_mmap<ap_uint<512>> A,
 	tapa::ostream<ap_uint<512>> & fifo_A,
 	const ap_uint<32> A_len,
 	const ap_uint<32> P_N
@@ -72,18 +72,25 @@ void read_A(
 		l_N: for(ap_uint<32> nn = 0; nn < (N + 7)/8; nn++) {
 #pragma HLS loop_flatten off
 #pragma HLS loop_tripcount min=1 max=16
-			rd_A: for(ap_uint<32> i = 0; i < A_len; i++) {
+			rd_A: for(ap_uint<32> i_req = 0, i_resp = 0; i_resp < A_len;) {
 #pragma HLS loop_tripcount min=1 max=10000
 #pragma HLS pipeline II=1
-				ap_uint<512> tmp_A = A[i];
-				fifo_A.write(tmp_A);
+				if (i_req < A_len &&
+				    i_req < i_resp + 64 &&
+						A.read_addr.try_write(i_req)) {
+					++i_req;
+				}
+				if (!fifo_A.full() && !A.read_data.empty()) {
+					fifo_A.try_write(A.read_data.read(nullptr));
+					++i_resp;
+				}
 			}
 		}
 	}
 }
 
 void read_B(
-	tapa::mmap<const ap_uint<512>> B,
+	tapa::async_mmap<ap_uint<512>> B,
 	tapa::ostream<ap_uint<512>> & fifo_B,
 	const ap_uint<32> K,
 	const ap_uint<32> P_N
@@ -96,11 +103,18 @@ void read_B(
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
 #pragma HLS loop_tripcount min=1 max=16
-		rd_B: for(ap_uint<32> i = 0; i < num_ite_B; i++) {
+		rd_B: for(ap_uint<32> i_req = 0, i_resp = 0; i_resp < num_ite_B;) {
 #pragma HLS loop_tripcount min=1 max=500000
 #pragma HLS pipeline II=1
-			ap_uint<512> tmp_B = B[i];
-			fifo_B.write(tmp_B);
+			if (i_req < num_ite_B &&
+					i_req < i_resp + 64 &&
+					B.read_addr.try_write(i_req)) {
+				++i_req;
+			}
+			if (!fifo_B.full() && !B.read_data.empty()) {
+				fifo_B.try_write(B.read_data.read(nullptr));
+				++i_resp;
+			}
 		}
 	}
 }
@@ -631,7 +645,7 @@ void C_collect(
 
 void write_C(
 	tapa::istream<ap_uint<512>> & fifo_C,
-	tapa::mmap<ap_uint<512>> C_out
+	tapa::async_mmap<ap_uint<512>> C_out
 	) {
 	const auto M_u512 = fifo_C.read();
 	ap_uint<32> M = M_u512(31, 0);
@@ -645,17 +659,27 @@ void write_C(
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
 #pragma HLS loop_tripcount min=1 max=16
-		wr_C: for(ap_uint<32> i = 0; i < num_ite_C; i++) {
+		wr_C: for(ap_uint<32> i_req = 0, i_resp = 0; i_resp < num_ite_C;) {
 #pragma HLS loop_tripcount min=1 max=500000
 #pragma HLS pipeline II=1
-			ap_uint<512> tmp_c = fifo_C.read();
-			C_out[i] = tmp_c;
+			if (i_req < num_ite_C &&
+					i_req < i_resp + 64 &&
+					!fifo_C.empty() &&
+					!C_out.write_addr.full() &&
+					!C_out.write_data.full() ) {
+				C_out.write_addr.try_write(i_req);
+				C_out.write_data.try_write(fifo_C.read(nullptr));
+				++i_req;
+			}
+			if (!C_out.write_resp.empty()) {
+				i_resp += ap_uint<9>(C_out.write_resp.read(nullptr)) + 1;
+			}
 		}
 	}
 }
 
 void read_C(
-	tapa::mmap<ap_uint<512>> C,
+	tapa::async_mmap<ap_uint<512>> C,
 	tapa::ostream<ap_uint<512>> & fifo_C,
 	const ap_uint<32> M,
 	const ap_uint<32> P_N
@@ -668,11 +692,18 @@ void read_C(
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
 #pragma HLS loop_tripcount min=1 max=16
-		rd_C: for(ap_uint<32> i = 0; i < num_ite_C; i++) {
+		rd_C: for(ap_uint<32> i_req = 0, i_resp = 0; i_resp < num_ite_C;) {
 #pragma HLS loop_tripcount min=1 max=500000
 #pragma HLS pipeline II=1
-			ap_uint<512> tmp_c = C[i];
-			fifo_C.write(tmp_c);
+			if (i_req < num_ite_C &&
+					i_req < i_resp + 64 &&
+					C.read_addr.try_write(i_req)) {
+				++i_req;
+			}
+			if (!fifo_C.full() && !C.read_data.empty()) {
+				fifo_C.try_write(C.read_data.read(nullptr));
+				++i_resp;
+			}
 		}
 	}
 }
@@ -740,11 +771,11 @@ void comp_C(
 constexpr int FIFO_DEPTH = 8;
 
 void sextans(
-	tapa::mmap<const ap_uint<32>> edge_list_ptr,
+	tapa::mmap<ap_uint<32>> edge_list_ptr,
 
-	tapa::mmaps<const ap_uint<512>, NUM_CH_SPARSE> edge_list_ch,
+	tapa::mmaps<ap_uint<512>, NUM_CH_SPARSE> edge_list_ch,
 
-	tapa::mmaps<const ap_uint<512>, NUM_CH_B> mat_B_ch,
+	tapa::mmaps<ap_uint<512>, NUM_CH_B> mat_B_ch,
 
 	tapa::mmaps<ap_uint<512>, NUM_CH_C> mat_C_ch_in,
 

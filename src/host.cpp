@@ -355,9 +355,9 @@ int main(int argc, char **argv) {
         time_taken += tapa::invoke(
             sextans,
             argv[1],
-            tapa::read_only_mmap<const unsigned int>(edge_list_ptr_fpga).reinterpret<const ap_uint<32>>(),
-            tapa::read_only_mmaps<const unsigned long, NUM_CH_SPARSE>(sparse_A_fpga_vec).reinterpret<const ap_uint<512>>(),
-            tapa::read_only_mmaps<const float, NUM_CH_B>(mat_B_fpga_vec).reinterpret<const ap_uint<512>>(),
+            tapa::read_only_mmap<unsigned int>(edge_list_ptr_fpga).reinterpret<ap_uint<32>>(),
+            tapa::read_only_mmaps<unsigned long, NUM_CH_SPARSE>(sparse_A_fpga_vec).reinterpret<ap_uint<512>>(),
+            tapa::read_only_mmaps<float, NUM_CH_B>(mat_B_fpga_vec).reinterpret<ap_uint<512>>(),
             tapa::read_only_mmaps<float, NUM_CH_C>(mat_C_fpga_in).reinterpret<ap_uint<512>>(),
             tapa::write_only_mmaps<float, NUM_CH_C>(mat_C_fpga_vec).reinterpret<ap_uint<512>>(),
             MAX_SIZE_edge_LIST_PTR,
