@@ -264,95 +264,32 @@ void PEG(
 #pragma HLS loop_tripcount min=1 max=49
 
 				// fill onchip B
-				ap_uint<512> b_512_x0;
-				ap_uint<512> b_512_x1;
-				ap_uint<512> b_512_x2;
-				ap_uint<512> b_512_x3;
-
-				bool b_512_x0_ready = false;
-				bool b_512_x1_ready = false;
-				bool b_512_x2_ready = false;
-				bool b_512_x3_ready = false;
 
 				read_B: for (ap_uint<14> j = 0; (j < WINDOW_SIZE/8) && (j < (K + 7) / 8 - i*WINDOW_SIZE/8); ) {
 #pragma HLS loop_tripcount min=1 max=512
 #pragma HLS pipeline II = 1
-					if (!b_512_x0_ready) {
-						b_512_x0_ready = fifo_B_x[0].try_read(b_512_x0);
-					}
-					if (!b_512_x1_ready) {
-						b_512_x1_ready = fifo_B_x[1].try_read(b_512_x1);
-					}
-					if (!b_512_x2_ready) {
-						b_512_x2_ready = fifo_B_x[2].try_read(b_512_x2);
-					}
-					if (!b_512_x3_ready) {
-						b_512_x3_ready = fifo_B_x[3].try_read(b_512_x3);
-					}
 
-					bool b_2048_ready = b_512_x0_ready && b_512_x1_ready && b_512_x2_ready && b_512_x3_ready;
+					bool b_2048_ready = true;
+          for (int k = 0; k < 4; ++k) {
+            b_2048_ready &= !fifo_B_x[k].empty();
+          }
 
 					if (b_2048_ready) {
-						ap_uint<512> b_512_x0_delay = tapa::reg(b_512_x0);
-						ap_uint<512> b_512_x1_delay = tapa::reg(b_512_x1);
-						ap_uint<512> b_512_x2_delay = tapa::reg(b_512_x2);
-						ap_uint<512> b_512_x3_delay = tapa::reg(b_512_x3);
+						ap_uint<512> b_512_x_delay[NUM_CH_B];
+#pragma HLS array_partition variable=b_512_x_delay complete
 
-						fifo_B_out_x[0].write(b_512_x0_delay);
-						fifo_B_out_x[1].write(b_512_x1_delay);
-						fifo_B_out_x[2].write(b_512_x2_delay);
-						fifo_B_out_x[3].write(b_512_x3_delay);
+            for (int k = 0; k < 4; ++k) {
+              b_512_x_delay[k] = tapa::reg(fifo_B_x[k].read(nullptr));
+						  fifo_B_out_x[k].write(b_512_x_delay[k]);
+            }
 
 						read_B_p: for (ap_uint<4> k = 0; k < 8; ++k) {
-							ap_uint<32> b_pe_d0 = b_512_x0_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d1 = b_512_x0_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d2 = b_512_x1_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d3 = b_512_x1_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d4 = b_512_x2_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d5 = b_512_x2_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d6 = b_512_x3_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d7 = b_512_x3_delay(31 + k * 32 + 256,  k * 32 + 256);
-
-							local_B[0][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B[0][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B[0][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B[0][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B[0][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B[0][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B[0][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B[0][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
-
-							local_B[1][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B[1][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B[1][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B[1][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B[1][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B[1][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B[1][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B[1][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
-
-							local_B[2][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B[2][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B[2][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B[2][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B[2][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B[2][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B[2][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B[2][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
-
-							local_B[3][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B[3][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B[3][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B[3][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B[3][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B[3][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B[3][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B[3][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+              for (int l = 0; l < 4; ++l) {
+                for (int m = 0; m < 8; ++m) {
+                  local_B[l][m][tapa::reg(tapa::reg(j)) * 8 + k] = b_512_x_delay[m/2](31 + k * 32 + m % 2 * 256,  k * 32 + m % 2 * 256);
+                }
+              }
 						}
-						b_512_x0_ready = false;
-						b_512_x1_ready = false;
-						b_512_x2_ready = false;
-						b_512_x3_ready = false;
 						++j;
 					}
 				}
@@ -544,91 +481,31 @@ void PEG_last(
 #pragma HLS loop_tripcount min=1 max=49
 
 				// fill onchip B
-				ap_uint<512> b_512_x0;
-				ap_uint<512> b_512_x1;
-				ap_uint<512> b_512_x2;
-				ap_uint<512> b_512_x3;
-
-				bool b_512_x0_ready = false;
-				bool b_512_x1_ready = false;
-				bool b_512_x2_ready = false;
-				bool b_512_x3_ready = false;
 
 				read_B: for (ap_uint<14> j = 0; (j < WINDOW_SIZE/8) && (j < (K + 7) / 8 - i*WINDOW_SIZE/8); ) {
 #pragma HLS loop_tripcount min=1 max=512
 #pragma HLS pipeline II=1
-					if (!b_512_x0_ready) {
-						b_512_x0_ready = fifo_B_x[0].try_read(b_512_x0);
-					}
-					if (!b_512_x1_ready) {
-						b_512_x1_ready = fifo_B_x[1].try_read(b_512_x1);
-					}
-					if (!b_512_x2_ready) {
-						b_512_x2_ready = fifo_B_x[2].try_read(b_512_x2);
-					}
-					if (!b_512_x3_ready) {
-						b_512_x3_ready = fifo_B_x[3].try_read(b_512_x3);
-					}
 
-					bool b_2048_ready = b_512_x0_ready && b_512_x1_ready && b_512_x2_ready && b_512_x3_ready;
+					bool b_2048_ready = true;
+          for (int k = 0; k < 4; ++k) {
+            b_2048_ready &= !fifo_B_x[k].empty();
+          }
 
 					if (b_2048_ready) {
-						ap_uint<512> b_512_x0_delay = tapa::reg(b_512_x0);
-						ap_uint<512> b_512_x1_delay = tapa::reg(b_512_x1);
-						ap_uint<512> b_512_x2_delay = tapa::reg(b_512_x2);
-						ap_uint<512> b_512_x3_delay = tapa::reg(b_512_x3);
+						ap_uint<512> b_512_x_delay[NUM_CH_B];
+#pragma HLS array_partition variable=b_512_x_delay complete
 
+            for (int k = 0; k < 4; ++k) {
+              b_512_x_delay[k] = tapa::reg(fifo_B_x[k].read(nullptr));
+            }
 
 						read_B_p: for (ap_uint<4> k = 0; k < 8; ++k) {
-							ap_uint<32> b_pe_d0 = b_512_x0_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d1 = b_512_x0_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d2 = b_512_x1_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d3 = b_512_x1_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d4 = b_512_x2_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d5 = b_512_x2_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d6 = b_512_x3_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d7 = b_512_x3_delay(31 + k * 32 + 256,  k * 32 + 256);
-
-							local_B[0][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B[0][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B[0][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B[0][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B[0][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B[0][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B[0][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B[0][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
-
-							local_B[1][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B[1][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B[1][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B[1][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B[1][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B[1][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B[1][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B[1][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
-
-							local_B[2][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B[2][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B[2][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B[2][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B[2][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B[2][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B[2][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B[2][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
-
-							local_B[3][0][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d0;
-							local_B[3][1][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d1;
-							local_B[3][2][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d2;
-							local_B[3][3][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d3;
-							local_B[3][4][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d4;
-							local_B[3][5][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d5;
-							local_B[3][6][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d6;
-							local_B[3][7][tapa::reg(tapa::reg(j)) * 8 + k] = b_pe_d7;
+              for (int l = 0; l < 4; ++l) {
+                for (int m = 0; m < 8; ++m) {
+                  local_B[l][m][tapa::reg(tapa::reg(j)) * 8 + k] = b_512_x_delay[m/2](31 + k * 32 + m % 2 * 256,  k * 32 + m % 2 * 256);
+                }
+              }
 						}
-						b_512_x0_ready = false;
-						b_512_x1_ready = false;
-						b_512_x2_ready = false;
-						b_512_x3_ready = false;
 						++j;
 					}
 				}
