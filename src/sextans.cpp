@@ -138,13 +138,13 @@ void PEcore(
     ap_uint<18> & addr_c,
     ap_uint<32> & a_val_u,
     ap_uint<64> local_C[NUM_CH_C / 2][URAM_DEPTH],
-		ap_uint<32> local_B[8][WINDOW_SIZE]
+		ap_uint<32> local_B[NUM_CH_C][WINDOW_SIZE]
     ) {
 #pragma HLS inline
     if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
         float a_val_f = tapa::bit_cast<float>(a_val_u);
 
-        for (int i = 0; i < 8/2; ++i) {
+        for (int i = 0; i < NUM_CH_C / 2; ++i) {
           PU2core(
               addr_c,
               a_val_f,
@@ -244,7 +244,7 @@ void PEG(
 			}
 			//define local B buffer and pragma local B buffer if partition factor > 1
 
-			ap_uint<32> local_B[8/2][8][WINDOW_SIZE];
+			ap_uint<32> local_B[NUM_CH_SPARSE/2][NUM_CH_C][WINDOW_SIZE];
 #pragma HLS bind_storage variable=local_B latency=3
 #pragma HLS array_partition variable=local_B complete dim=1
 #pragma HLS array_partition variable=local_B complete dim=2
@@ -264,7 +264,7 @@ void PEG(
 #pragma HLS pipeline II = 1
 
 					bool b_2048_ready = true;
-          for (int k = 0; k < 4; ++k) {
+          for (int k = 0; k < NUM_CH_B; ++k) {
             b_2048_ready &= !fifo_B_x[k].empty();
           }
 
@@ -272,15 +272,15 @@ void PEG(
 						ap_uint<512> b_512_x_delay[NUM_CH_B];
 #pragma HLS array_partition variable=b_512_x_delay complete
 
-            for (int k = 0; k < 4; ++k) {
+            for (int k = 0; k < NUM_CH_B; ++k) {
               b_512_x_delay[k] = tapa::reg(fifo_B_x[k].read(nullptr));
 						  fifo_B_out_x[k].write(b_512_x_delay[k]);
             }
 
-						read_B_p: for (ap_uint<4> k = 0; k < 8; ++k) {
-              for (int l = 0; l < 4; ++l) {
-                for (int m = 0; m < 8; ++m) {
-                  local_B[l][m][tapa::reg(tapa::reg(j)) * 8 + k] = b_512_x_delay[m/2](31 + k * 32 + m % 2 * 256,  k * 32 + m % 2 * 256);
+						read_B_p: for (ap_uint<4> k = 0; k < B_PARTITION_FACTOR * 2; ++k) {
+              for (int l = 0; l < NUM_CH_SPARSE / 2; ++l) {
+                for (int m = 0; m < NUM_CH_C; ++m) {
+                  local_B[l][m][tapa::reg(tapa::reg(j)) * B_PARTITION_FACTOR * 2 + k] = b_512_x_delay[m/2](31 + k * 32 + m % 2 * 256,  k * 32 + m % 2 * 256);
                 }
               }
 						}
@@ -451,7 +451,7 @@ void PEG_last(
 			}
 			//define local B buffer and pragma local B buffer if partition factor > 1
 
-			ap_uint<32> local_B[8/2][8][WINDOW_SIZE];
+			ap_uint<32> local_B[NUM_CH_SPARSE/2][NUM_CH_C][WINDOW_SIZE];
 #pragma HLS bind_storage variable=local_B latency=3
 #pragma HLS array_partition variable=local_B complete dim=1
 #pragma HLS array_partition variable=local_B complete dim=2
@@ -469,7 +469,7 @@ void PEG_last(
 #pragma HLS pipeline II=1
 
 					bool b_2048_ready = true;
-          for (int k = 0; k < 4; ++k) {
+          for (int k = 0; k < NUM_CH_B; ++k) {
             b_2048_ready &= !fifo_B_x[k].empty();
           }
 
@@ -477,14 +477,14 @@ void PEG_last(
 						ap_uint<512> b_512_x_delay[NUM_CH_B];
 #pragma HLS array_partition variable=b_512_x_delay complete
 
-            for (int k = 0; k < 4; ++k) {
+            for (int k = 0; k < NUM_CH_B; ++k) {
               b_512_x_delay[k] = tapa::reg(fifo_B_x[k].read(nullptr));
             }
 
-						read_B_p: for (ap_uint<4> k = 0; k < 8; ++k) {
-              for (int l = 0; l < 4; ++l) {
-                for (int m = 0; m < 8; ++m) {
-                  local_B[l][m][tapa::reg(tapa::reg(j)) * 8 + k] = b_512_x_delay[m/2](31 + k * 32 + m % 2 * 256,  k * 32 + m % 2 * 256);
+						read_B_p: for (ap_uint<4> k = 0; k < B_PARTITION_FACTOR * 2; ++k) {
+              for (int l = 0; l < NUM_CH_SPARSE / 2; ++l) {
+                for (int m = 0; m < NUM_CH_C; ++m) {
+                  local_B[l][m][tapa::reg(tapa::reg(j)) * B_PARTITION_FACTOR * 2 + k] = b_512_x_delay[m/2](31 + k * 32 + m % 2 * 256,  k * 32 + m % 2 * 256);
                 }
               }
 						}
