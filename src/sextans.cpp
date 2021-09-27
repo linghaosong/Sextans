@@ -612,24 +612,6 @@ void C_collect(
     tapa::istreams<ap_uint<512>, NUM_CH_SPARSE> & fifo_C_in,
     tapa::ostreams<ap_uint<512>, NUM_CH_C> & fifo_C_out
     ) {
-    ap_uint<512> tmp_c0;
-    ap_uint<512> tmp_c1;
-    ap_uint<512> tmp_c2;
-    ap_uint<512> tmp_c3;
-    ap_uint<512> tmp_c4;
-    ap_uint<512> tmp_c5;
-    ap_uint<512> tmp_c6;
-    ap_uint<512> tmp_c7;
-
-    bool c0_ready = false;
-    bool c1_ready = false;
-    bool c2_ready = false;
-    bool c3_ready = false;
-    bool c4_ready = false;
-    bool c5_ready = false;
-    bool c6_ready = false;
-    bool c7_ready = false;
-
     ap_uint<512> MN512;
     bool M512_ready = false;
     w_Mxx: while(!M512_ready) {
@@ -640,23 +622,9 @@ void C_collect(
     ap_uint<32> M = MN512(31, 0);
     ap_uint<32> P_N = MN512(63, 32);
 
-    ap_uint<512> out_c0;
-    ap_uint<512> out_c1;
-    ap_uint<512> out_c2;
-    ap_uint<512> out_c3;
-    ap_uint<512> out_c4;
-    ap_uint<512> out_c5;
-    ap_uint<512> out_c6;
-    ap_uint<512> out_c7;
-
-    fifo_C_out[0].write(tapa::reg(MN512));
-    fifo_C_out[1].write(tapa::reg(MN512));
-    fifo_C_out[2].write(tapa::reg(MN512));
-    fifo_C_out[3].write(tapa::reg(MN512));
-    fifo_C_out[4].write(tapa::reg(MN512));
-    fifo_C_out[5].write(tapa::reg(MN512));
-    fifo_C_out[6].write(tapa::reg(MN512));
-    fifo_C_out[7].write(tapa::reg(MN512));
+    for (int i = 0; i < NUM_CH_SPARSE; ++i) {
+      fifo_C_out[i].write(tapa::reg(MN512));
+    }
 
     const ap_uint<16> N16 = P_N(31, 16);
     const ap_uint<16> rp_time = (N16 == 0)? ((ap_uint<16>) 1) : N16;
@@ -669,132 +637,22 @@ void C_collect(
         cvt_b: for(ap_uint<32> i = 0; i < num_ite; ) {
 #pragma HLS loop_tripcount min=1 max=800
 #pragma HLS pipeline II=1
-            if (!c0_ready) {
-                c0_ready = fifo_C_in[0].try_read(tmp_c0);
+            bool all_c_ready = true;
+            for (int j = 0; j < NUM_CH_SPARSE; ++j) {
+              all_c_ready &= !fifo_C_in[j].empty();
             }
-            if (!c1_ready) {
-                c1_ready = fifo_C_in[1].try_read(tmp_c1);
-            }
-            if (!c2_ready) {
-                c2_ready = fifo_C_in[2].try_read(tmp_c2);
-            }
-            if (!c3_ready) {
-                c3_ready = fifo_C_in[3].try_read(tmp_c3);
-            }
-            if (!c4_ready) {
-                c4_ready = fifo_C_in[4].try_read(tmp_c4);
-            }
-            if (!c5_ready) {
-                c5_ready = fifo_C_in[5].try_read(tmp_c5);
-            }
-            if (!c6_ready) {
-                c6_ready = fifo_C_in[6].try_read(tmp_c6);
-            }
-            if (!c7_ready) {
-                c7_ready = fifo_C_in[7].try_read(tmp_c7);
-            }
-
-            bool all_c_ready = c0_ready && c1_ready && c2_ready && c3_ready && c4_ready && c5_ready && c6_ready && c7_ready;
-
             if (all_c_ready) {
-                ap_uint<512> tmp_c0_delay = tapa::reg(tmp_c0);
-                ap_uint<512> tmp_c1_delay = tapa::reg(tmp_c1);
-                ap_uint<512> tmp_c2_delay = tapa::reg(tmp_c2);
-                ap_uint<512> tmp_c3_delay = tapa::reg(tmp_c3);
-                ap_uint<512> tmp_c4_delay = tapa::reg(tmp_c4);
-                ap_uint<512> tmp_c5_delay = tapa::reg(tmp_c5);
-                ap_uint<512> tmp_c6_delay = tapa::reg(tmp_c6);
-                ap_uint<512> tmp_c7_delay = tapa::reg(tmp_c7);
-
-                out_c0( 63,   0) = tmp_c0_delay(  63,    0);
-                out_c0(127,  64) = tmp_c1_delay(  63,    0);
-                out_c0(191, 128) = tmp_c2_delay(  63,    0);
-                out_c0(255, 192) = tmp_c3_delay(  63,    0);
-                out_c0(319, 256) = tmp_c4_delay(  63,    0);
-                out_c0(383, 320) = tmp_c5_delay(  63,    0);
-                out_c0(447, 384) = tmp_c6_delay(  63,    0);
-                out_c0(511, 448) = tmp_c7_delay(  63,    0);
-
-                out_c1( 63,   0) = tmp_c0_delay( 127,   64);
-                out_c1(127,  64) = tmp_c1_delay( 127,   64);
-                out_c1(191, 128) = tmp_c2_delay( 127,   64);
-                out_c1(255, 192) = tmp_c3_delay( 127,   64);
-                out_c1(319, 256) = tmp_c4_delay( 127,   64);
-                out_c1(383, 320) = tmp_c5_delay( 127,   64);
-                out_c1(447, 384) = tmp_c6_delay( 127,   64);
-                out_c1(511, 448) = tmp_c7_delay( 127,   64);
-
-                out_c2( 63,   0) = tmp_c0_delay( 191,  128);
-                out_c2(127,  64) = tmp_c1_delay( 191,  128);
-                out_c2(191, 128) = tmp_c2_delay( 191,  128);
-                out_c2(255, 192) = tmp_c3_delay( 191,  128);
-                out_c2(319, 256) = tmp_c4_delay( 191,  128);
-                out_c2(383, 320) = tmp_c5_delay( 191,  128);
-                out_c2(447, 384) = tmp_c6_delay( 191,  128);
-                out_c2(511, 448) = tmp_c7_delay( 191,  128);
-
-                out_c3( 63,   0) = tmp_c0_delay( 255,  192);
-                out_c3(127,  64) = tmp_c1_delay( 255,  192);
-                out_c3(191, 128) = tmp_c2_delay( 255,  192);
-                out_c3(255, 192) = tmp_c3_delay( 255,  192);
-                out_c3(319, 256) = tmp_c4_delay( 255,  192);
-                out_c3(383, 320) = tmp_c5_delay( 255,  192);
-                out_c3(447, 384) = tmp_c6_delay( 255,  192);
-                out_c3(511, 448) = tmp_c7_delay( 255,  192);
-
-                out_c4( 63,   0) = tmp_c0_delay( 319,  256);
-                out_c4(127,  64) = tmp_c1_delay( 319,  256);
-                out_c4(191, 128) = tmp_c2_delay( 319,  256);
-                out_c4(255, 192) = tmp_c3_delay( 319,  256);
-                out_c4(319, 256) = tmp_c4_delay( 319,  256);
-                out_c4(383, 320) = tmp_c5_delay( 319,  256);
-                out_c4(447, 384) = tmp_c6_delay( 319,  256);
-                out_c4(511, 448) = tmp_c7_delay( 319,  256);
-
-                out_c5( 63,   0) = tmp_c0_delay( 383,  320);
-                out_c5(127,  64) = tmp_c1_delay( 383,  320);
-                out_c5(191, 128) = tmp_c2_delay( 383,  320);
-                out_c5(255, 192) = tmp_c3_delay( 383,  320);
-                out_c5(319, 256) = tmp_c4_delay( 383,  320);
-                out_c5(383, 320) = tmp_c5_delay( 383,  320);
-                out_c5(447, 384) = tmp_c6_delay( 383,  320);
-                out_c5(511, 448) = tmp_c7_delay( 383,  320);
-
-                out_c6( 63,   0) = tmp_c0_delay( 447,  384);
-                out_c6(127,  64) = tmp_c1_delay( 447,  384);
-                out_c6(191, 128) = tmp_c2_delay( 447,  384);
-                out_c6(255, 192) = tmp_c3_delay( 447,  384);
-                out_c6(319, 256) = tmp_c4_delay( 447,  384);
-                out_c6(383, 320) = tmp_c5_delay( 447,  384);
-                out_c6(447, 384) = tmp_c6_delay( 447,  384);
-                out_c6(511, 448) = tmp_c7_delay( 447,  384);
-
-                out_c7( 63,   0) = tmp_c0_delay( 511,  448);
-                out_c7(127,  64) = tmp_c1_delay( 511,  448);
-                out_c7(191, 128) = tmp_c2_delay( 511,  448);
-                out_c7(255, 192) = tmp_c3_delay( 511,  448);
-                out_c7(319, 256) = tmp_c4_delay( 511,  448);
-                out_c7(383, 320) = tmp_c5_delay( 511,  448);
-                out_c7(447, 384) = tmp_c6_delay( 511,  448);
-                out_c7(511, 448) = tmp_c7_delay( 511,  448);
-
-                fifo_C_out[0].write(out_c0);
-                fifo_C_out[1].write(out_c1);
-                fifo_C_out[2].write(out_c2);
-                fifo_C_out[3].write(out_c3);
-                fifo_C_out[4].write(out_c4);
-                fifo_C_out[5].write(out_c5);
-                fifo_C_out[6].write(out_c6);
-                fifo_C_out[7].write(out_c7);
-
-                c0_ready = false;
-                c1_ready = false;
-                c2_ready = false;
-                c3_ready = false;
-                c4_ready = false;
-                c5_ready = false;
-                c6_ready = false;
-                c7_ready = false;
+                ap_uint<512> out_c[NUM_CH_C];
+#pragma HLS array_partition variable=out_c complete
+                for (int j = 0; j < NUM_CH_SPARSE; ++j) {
+                  ap_uint<512> tmp_c_delay = tapa::reg(fifo_C_in[j].read(nullptr));
+                  for (int k = 0; k < NUM_CH_C; ++k) {
+                    out_c[k](64*j+63, 64*j) = tmp_c_delay(64*k+63, 64*k);
+                  }
+                }
+                for (int j = 0; j < NUM_CH_C; ++j) {
+                  fifo_C_out[j].write(out_c[j]);
+                }
                 ++i;
             }
         }
