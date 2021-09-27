@@ -107,10 +107,9 @@ void read_B(
 
 void PU2core(
     ap_uint<18> & addr_c,
-    float & a_val_f,
-    float & b_val_d0_f,
-    float & b_val_d1_f,
-
+    float a_val_f,
+    float b_val_d0_f,
+    float b_val_d1_f,
     ap_uint<64> * local_C_pe0_d0_d1
     ) {
 #pragma HLS inline
@@ -145,55 +144,15 @@ void PEcore(
     if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
         float a_val_f = tapa::bit_cast<float>(a_val_u);
 
-        ap_uint<32> b_val_d0_u = local_B[0][addr_b];
-        ap_uint<32> b_val_d1_u = local_B[1][addr_b];
-        ap_uint<32> b_val_d2_u = local_B[2][addr_b];
-        ap_uint<32> b_val_d3_u = local_B[3][addr_b];
-        ap_uint<32> b_val_d4_u = local_B[4][addr_b];
-        ap_uint<32> b_val_d5_u = local_B[5][addr_b];
-        ap_uint<32> b_val_d6_u = local_B[6][addr_b];
-        ap_uint<32> b_val_d7_u = local_B[7][addr_b];
-
-        float b_val_d0_f = tapa::bit_cast<float>(b_val_d0_u);
-        float b_val_d1_f = tapa::bit_cast<float>(b_val_d1_u);
-        float b_val_d2_f = tapa::bit_cast<float>(b_val_d2_u);
-        float b_val_d3_f = tapa::bit_cast<float>(b_val_d3_u);
-        float b_val_d4_f = tapa::bit_cast<float>(b_val_d4_u);
-        float b_val_d5_f = tapa::bit_cast<float>(b_val_d5_u);
-        float b_val_d6_f = tapa::bit_cast<float>(b_val_d6_u);
-        float b_val_d7_f = tapa::bit_cast<float>(b_val_d7_u);
-
-        PU2core(
-            addr_c,
-            a_val_f,
-            b_val_d0_f,
-            b_val_d1_f,
-            local_C[0]
-            );
-
-        PU2core(
-            addr_c,
-            a_val_f,
-            b_val_d2_f,
-            b_val_d3_f,
-            local_C[1]
-            );
-
-        PU2core(
-            addr_c,
-            a_val_f,
-            b_val_d4_f,
-            b_val_d5_f,
-            local_C[2]
-            );
-
-        PU2core(
-            addr_c,
-            a_val_f,
-            b_val_d6_f,
-            b_val_d7_f,
-            local_C[3]
-            );
+        for (int i = 0; i < 8/2; ++i) {
+          PU2core(
+              addr_c,
+              a_val_f,
+              tapa::bit_cast<float>(local_B[i*2+0][addr_b]),
+              tapa::bit_cast<float>(local_B[i*2+1][addr_b]),
+              local_C[i]
+              );
+        }
     }
 }
 
