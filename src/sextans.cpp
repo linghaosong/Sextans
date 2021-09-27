@@ -273,85 +273,10 @@ void PEG(
 	const ap_uint<32> N = P_N & ((ap_uint<32>) 0x0000FFFF);
 
 	//define local C buffer and pragma to URAM
-	ap_uint<64> local_C_pe0_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe0_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe0_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe0_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe0_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe1_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe1_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe1_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe1_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe1_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe2_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe2_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe2_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe2_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe2_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe3_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe3_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe3_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe3_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe3_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe4_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe4_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe4_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe4_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe4_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe5_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe5_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe5_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe5_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe5_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe6_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe6_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe6_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe6_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe6_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe7_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe7_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe7_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe7_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe7_d6_d7 type=RAM_2P impl=URAM
+	ap_uint<64> local_C[NUM_CH_SPARSE][NUM_CH_C / 2][URAM_DEPTH];
+#pragma HLS bind_storage variable=local_C type=RAM_2P impl=URAM
+#pragma HLS array_partition complete variable=local_C dim=1
+#pragma HLS array_partition complete variable=local_C dim=2
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
@@ -364,38 +289,11 @@ void PEG(
 			init_C: for (ap_uint<32> i = 0; i < ((M + 63) / 64); ++i) {
 #pragma HLS loop_tripcount min=1 max=800
 #pragma HLS pipeline II=1
-				local_C_pe0_d0_d1[i] = 0;
-				local_C_pe0_d2_d3[i] = 0;
-				local_C_pe0_d4_d5[i] = 0;
-				local_C_pe0_d6_d7[i] = 0;
-				local_C_pe1_d0_d1[i] = 0;
-				local_C_pe1_d2_d3[i] = 0;
-				local_C_pe1_d4_d5[i] = 0;
-				local_C_pe1_d6_d7[i] = 0;
-				local_C_pe2_d0_d1[i] = 0;
-				local_C_pe2_d2_d3[i] = 0;
-				local_C_pe2_d4_d5[i] = 0;
-				local_C_pe2_d6_d7[i] = 0;
-				local_C_pe3_d0_d1[i] = 0;
-				local_C_pe3_d2_d3[i] = 0;
-				local_C_pe3_d4_d5[i] = 0;
-				local_C_pe3_d6_d7[i] = 0;
-				local_C_pe4_d0_d1[i] = 0;
-				local_C_pe4_d2_d3[i] = 0;
-				local_C_pe4_d4_d5[i] = 0;
-				local_C_pe4_d6_d7[i] = 0;
-				local_C_pe5_d0_d1[i] = 0;
-				local_C_pe5_d2_d3[i] = 0;
-				local_C_pe5_d4_d5[i] = 0;
-				local_C_pe5_d6_d7[i] = 0;
-				local_C_pe6_d0_d1[i] = 0;
-				local_C_pe6_d2_d3[i] = 0;
-				local_C_pe6_d4_d5[i] = 0;
-				local_C_pe6_d6_d7[i] = 0;
-				local_C_pe7_d0_d1[i] = 0;
-				local_C_pe7_d2_d3[i] = 0;
-				local_C_pe7_d4_d5[i] = 0;
-				local_C_pe7_d6_d7[i] = 0;
+				for (int j = 0; j < NUM_CH_SPARSE; ++j) {
+					for (int k = 0; k < NUM_CH_C / 2; ++k) {
+						local_C[j][k][i] = 0;
+					}
+				}
 			}
 			//define local B buffer and pragma local B buffer if partition factor > 1
 
@@ -628,46 +526,7 @@ void PEG(
 				computation: for (ap_uint<32> j = start_32; j < end_32; ) {
 #pragma HLS loop_tripcount min=1 max=200
 #pragma HLS pipeline II=1
-
-#pragma HLS dependence true variable=local_C_pe0_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe1_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe2_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe3_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe4_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe5_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe6_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe7_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d6_d7 distance=DEP_DIST_LOAD_STORE
+#pragma HLS dependence true variable=local_C distance=DEP_DIST_LOAD_STORE
 
 					ap_uint<512> a_pes;
 					bool a_pes_ready = fifo_A.try_read(a_pes);
@@ -702,10 +561,10 @@ void PEG(
 							a_col[0],
 							a_row[0],
 							a_val[0],
-							local_C_pe0_d0_d1,
-							local_C_pe0_d2_d3,
-							local_C_pe0_d4_d5,
-							local_C_pe0_d6_d7,
+							local_C[0][0],
+							local_C[0][1],
+							local_C[0][2],
+							local_C[0][3],
 							local_B_pe0_pe1_d0,
 							local_B_pe0_pe1_d1,
 							local_B_pe0_pe1_d2,
@@ -720,10 +579,10 @@ void PEG(
 							a_col[1],
 							a_row[1],
 							a_val[1],
-							local_C_pe1_d0_d1,
-							local_C_pe1_d2_d3,
-							local_C_pe1_d4_d5,
-							local_C_pe1_d6_d7,
+							local_C[1][0],
+							local_C[1][1],
+							local_C[1][2],
+							local_C[1][3],
 							local_B_pe0_pe1_d0,
 							local_B_pe0_pe1_d1,
 							local_B_pe0_pe1_d2,
@@ -738,10 +597,10 @@ void PEG(
 							a_col[2],
 							a_row[2],
 							a_val[2],
-							local_C_pe2_d0_d1,
-							local_C_pe2_d2_d3,
-							local_C_pe2_d4_d5,
-							local_C_pe2_d6_d7,
+							local_C[2][0],
+							local_C[2][1],
+							local_C[2][2],
+							local_C[2][3],
 							local_B_pe2_pe3_d0,
 							local_B_pe2_pe3_d1,
 							local_B_pe2_pe3_d2,
@@ -756,10 +615,10 @@ void PEG(
 							a_col[3],
 							a_row[3],
 							a_val[3],
-							local_C_pe3_d0_d1,
-							local_C_pe3_d2_d3,
-							local_C_pe3_d4_d5,
-							local_C_pe3_d6_d7,
+							local_C[3][0],
+							local_C[3][1],
+							local_C[3][2],
+							local_C[3][3],
 							local_B_pe2_pe3_d0,
 							local_B_pe2_pe3_d1,
 							local_B_pe2_pe3_d2,
@@ -774,10 +633,10 @@ void PEG(
 							a_col[4],
 							a_row[4],
 							a_val[4],
-							local_C_pe4_d0_d1,
-							local_C_pe4_d2_d3,
-							local_C_pe4_d4_d5,
-							local_C_pe4_d6_d7,
+							local_C[4][0],
+							local_C[4][1],
+							local_C[4][2],
+							local_C[4][3],
 							local_B_pe4_pe5_d0,
 							local_B_pe4_pe5_d1,
 							local_B_pe4_pe5_d2,
@@ -792,10 +651,10 @@ void PEG(
 							a_col[5],
 							a_row[5],
 							a_val[5],
-							local_C_pe5_d0_d1,
-							local_C_pe5_d2_d3,
-							local_C_pe5_d4_d5,
-							local_C_pe5_d6_d7,
+							local_C[5][0],
+							local_C[5][1],
+							local_C[5][2],
+							local_C[5][3],
 							local_B_pe4_pe5_d0,
 							local_B_pe4_pe5_d1,
 							local_B_pe4_pe5_d2,
@@ -810,10 +669,10 @@ void PEG(
 							a_col[6],
 							a_row[6],
 							a_val[6],
-							local_C_pe6_d0_d1,
-							local_C_pe6_d2_d3,
-							local_C_pe6_d4_d5,
-							local_C_pe6_d6_d7,
+							local_C[6][0],
+							local_C[6][1],
+							local_C[6][2],
+							local_C[6][3],
 							local_B_pe6_pe7_d0,
 							local_B_pe6_pe7_d1,
 							local_B_pe6_pe7_d2,
@@ -828,10 +687,10 @@ void PEG(
 							a_col[7],
 							a_row[7],
 							a_val[7],
-							local_C_pe7_d0_d1,
-							local_C_pe7_d2_d3,
-							local_C_pe7_d4_d5,
-							local_C_pe7_d6_d7,
+							local_C[7][0],
+							local_C[7][1],
+							local_C[7][2],
+							local_C[7][3],
 							local_B_pe6_pe7_d0,
 							local_B_pe6_pe7_d1,
 							local_B_pe6_pe7_d2,
@@ -860,55 +719,10 @@ void PEG(
 				ap_uint<32> u_32_d_pe[8][2];
 #pragma HLS array_partition variable=u_32_d_pe complete
 
-				switch (i % 4) {
-					case 0:
-						u_64_pe_d[0][0] = local_C_pe0_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe0_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe0_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe0_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe1_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe1_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe1_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe1_d6_d7[i/4];
-
-						break;
-					case 1:
-						u_64_pe_d[0][0] = local_C_pe2_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe2_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe2_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe2_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe3_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe3_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe3_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe3_d6_d7[i/4];
-
-						break;
-					case 2:
-						u_64_pe_d[0][0] = local_C_pe4_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe4_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe4_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe4_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe5_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe5_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe5_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe5_d6_d7[i/4];
-
-						break;
-					case 3:
-						u_64_pe_d[0][0] = local_C_pe6_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe6_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe6_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe6_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe7_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe7_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe7_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe7_d6_d7[i/4];
-
-						break;
+				for (int pe = 0; pe < 2; ++pe) {
+					for (int d = 0; d < NUM_CH_B; ++d) {
+						u_64_pe_d[pe][d] = local_C[i % NUM_CH_B * 2 + pe][d][i / NUM_CH_B];
+					}
 				}
 
 				for (ap_uint<4> pe = 0; pe < 2; ++pe) {
@@ -977,85 +791,10 @@ void PEG_last(
 	fifo_C_out0.write(MN512);
 
 	//define local C buffer and pragma to URAM
-	ap_uint<64> local_C_pe0_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe0_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe0_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe0_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe0_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe1_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe1_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe1_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe1_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe1_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe2_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe2_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe2_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe2_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe2_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe3_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe3_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe3_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe3_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe3_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe4_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe4_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe4_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe4_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe4_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe5_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe5_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe5_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe5_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe5_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe6_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe6_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe6_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe6_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe6_d6_d7 type=RAM_2P impl=URAM
-
-	ap_uint<64> local_C_pe7_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d6_d7[URAM_DEPTH];
-
-#pragma HLS bind_storage variable=local_C_pe7_d0_d1 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe7_d2_d3 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe7_d4_d5 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=local_C_pe7_d6_d7 type=RAM_2P impl=URAM
+	ap_uint<64> local_C[NUM_CH_SPARSE][NUM_CH_C / 2][URAM_DEPTH];
+#pragma HLS bind_storage variable=local_C type=RAM_2P impl=URAM
+#pragma HLS array_partition complete variable=local_C dim=1
+#pragma HLS array_partition complete variable=local_C dim=2
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
@@ -1068,38 +807,11 @@ void PEG_last(
 			init_C: for (ap_uint<32> i = 0; i < ((M + 63) / 64); ++i) {
 #pragma HLS loop_tripcount min=1 max=800
 #pragma HLS pipeline II=1
-				local_C_pe0_d0_d1[i] = 0;
-				local_C_pe0_d2_d3[i] = 0;
-				local_C_pe0_d4_d5[i] = 0;
-				local_C_pe0_d6_d7[i] = 0;
-				local_C_pe1_d0_d1[i] = 0;
-				local_C_pe1_d2_d3[i] = 0;
-				local_C_pe1_d4_d5[i] = 0;
-				local_C_pe1_d6_d7[i] = 0;
-				local_C_pe2_d0_d1[i] = 0;
-				local_C_pe2_d2_d3[i] = 0;
-				local_C_pe2_d4_d5[i] = 0;
-				local_C_pe2_d6_d7[i] = 0;
-				local_C_pe3_d0_d1[i] = 0;
-				local_C_pe3_d2_d3[i] = 0;
-				local_C_pe3_d4_d5[i] = 0;
-				local_C_pe3_d6_d7[i] = 0;
-				local_C_pe4_d0_d1[i] = 0;
-				local_C_pe4_d2_d3[i] = 0;
-				local_C_pe4_d4_d5[i] = 0;
-				local_C_pe4_d6_d7[i] = 0;
-				local_C_pe5_d0_d1[i] = 0;
-				local_C_pe5_d2_d3[i] = 0;
-				local_C_pe5_d4_d5[i] = 0;
-				local_C_pe5_d6_d7[i] = 0;
-				local_C_pe6_d0_d1[i] = 0;
-				local_C_pe6_d2_d3[i] = 0;
-				local_C_pe6_d4_d5[i] = 0;
-				local_C_pe6_d6_d7[i] = 0;
-				local_C_pe7_d0_d1[i] = 0;
-				local_C_pe7_d2_d3[i] = 0;
-				local_C_pe7_d4_d5[i] = 0;
-				local_C_pe7_d6_d7[i] = 0;
+				for (int j = 0; j < NUM_CH_SPARSE; ++j) {
+					for (int k = 0; k < NUM_CH_C / 2; ++k) {
+						local_C[j][k][i] = 0;
+					}
+				}
 			}
 			//define local B buffer and pragma local B buffer if partition factor > 1
 
@@ -1324,46 +1036,7 @@ void PEG_last(
 				computation: for (ap_uint<32> j = start_32; j < end_32; ) {
 #pragma HLS loop_tripcount min=1 max=200
 #pragma HLS pipeline II=1
-
-#pragma HLS dependence true variable=local_C_pe0_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe1_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe2_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe3_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe4_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe5_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe6_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe7_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d6_d7 distance=DEP_DIST_LOAD_STORE
+#pragma HLS dependence true variable=local_C distance=DEP_DIST_LOAD_STORE
 
 					ap_uint<512> a_pes;
 					bool a_pes_ready = fifo_A.try_read(a_pes);
@@ -1398,10 +1071,10 @@ void PEG_last(
 							a_col[0],
 							a_row[0],
 							a_val[0],
-							local_C_pe0_d0_d1,
-							local_C_pe0_d2_d3,
-							local_C_pe0_d4_d5,
-							local_C_pe0_d6_d7,
+							local_C[0][0],
+							local_C[0][1],
+							local_C[0][2],
+							local_C[0][3],
 							local_B_pe0_pe1_d0,
 							local_B_pe0_pe1_d1,
 							local_B_pe0_pe1_d2,
@@ -1416,10 +1089,10 @@ void PEG_last(
 							a_col[1],
 							a_row[1],
 							a_val[1],
-							local_C_pe1_d0_d1,
-							local_C_pe1_d2_d3,
-							local_C_pe1_d4_d5,
-							local_C_pe1_d6_d7,
+							local_C[1][0],
+							local_C[1][1],
+							local_C[1][2],
+							local_C[1][3],
 							local_B_pe0_pe1_d0,
 							local_B_pe0_pe1_d1,
 							local_B_pe0_pe1_d2,
@@ -1434,10 +1107,10 @@ void PEG_last(
 							a_col[2],
 							a_row[2],
 							a_val[2],
-							local_C_pe2_d0_d1,
-							local_C_pe2_d2_d3,
-							local_C_pe2_d4_d5,
-							local_C_pe2_d6_d7,
+							local_C[2][0],
+							local_C[2][1],
+							local_C[2][2],
+							local_C[2][3],
 							local_B_pe2_pe3_d0,
 							local_B_pe2_pe3_d1,
 							local_B_pe2_pe3_d2,
@@ -1452,10 +1125,10 @@ void PEG_last(
 							a_col[3],
 							a_row[3],
 							a_val[3],
-							local_C_pe3_d0_d1,
-							local_C_pe3_d2_d3,
-							local_C_pe3_d4_d5,
-							local_C_pe3_d6_d7,
+							local_C[3][0],
+							local_C[3][1],
+							local_C[3][2],
+							local_C[3][3],
 							local_B_pe2_pe3_d0,
 							local_B_pe2_pe3_d1,
 							local_B_pe2_pe3_d2,
@@ -1470,10 +1143,10 @@ void PEG_last(
 							a_col[4],
 							a_row[4],
 							a_val[4],
-							local_C_pe4_d0_d1,
-							local_C_pe4_d2_d3,
-							local_C_pe4_d4_d5,
-							local_C_pe4_d6_d7,
+							local_C[4][0],
+							local_C[4][1],
+							local_C[4][2],
+							local_C[4][3],
 							local_B_pe4_pe5_d0,
 							local_B_pe4_pe5_d1,
 							local_B_pe4_pe5_d2,
@@ -1488,10 +1161,10 @@ void PEG_last(
 							a_col[5],
 							a_row[5],
 							a_val[5],
-							local_C_pe5_d0_d1,
-							local_C_pe5_d2_d3,
-							local_C_pe5_d4_d5,
-							local_C_pe5_d6_d7,
+							local_C[5][0],
+							local_C[5][1],
+							local_C[5][2],
+							local_C[5][3],
 							local_B_pe4_pe5_d0,
 							local_B_pe4_pe5_d1,
 							local_B_pe4_pe5_d2,
@@ -1506,10 +1179,10 @@ void PEG_last(
 							a_col[6],
 							a_row[6],
 							a_val[6],
-							local_C_pe6_d0_d1,
-							local_C_pe6_d2_d3,
-							local_C_pe6_d4_d5,
-							local_C_pe6_d6_d7,
+							local_C[6][0],
+							local_C[6][1],
+							local_C[6][2],
+							local_C[6][3],
 							local_B_pe6_pe7_d0,
 							local_B_pe6_pe7_d1,
 							local_B_pe6_pe7_d2,
@@ -1524,10 +1197,10 @@ void PEG_last(
 							a_col[7],
 							a_row[7],
 							a_val[7],
-							local_C_pe7_d0_d1,
-							local_C_pe7_d2_d3,
-							local_C_pe7_d4_d5,
-							local_C_pe7_d6_d7,
+							local_C[7][0],
+							local_C[7][1],
+							local_C[7][2],
+							local_C[7][3],
 							local_B_pe6_pe7_d0,
 							local_B_pe6_pe7_d1,
 							local_B_pe6_pe7_d2,
@@ -1556,55 +1229,10 @@ void PEG_last(
 				ap_uint<32> u_32_d_pe[8][2];
 #pragma HLS array_partition variable=u_32_d_pe complete
 
-				switch (i % 4) {
-					case 0:
-						u_64_pe_d[0][0] = local_C_pe0_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe0_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe0_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe0_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe1_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe1_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe1_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe1_d6_d7[i/4];
-
-						break;
-					case 1:
-						u_64_pe_d[0][0] = local_C_pe2_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe2_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe2_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe2_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe3_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe3_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe3_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe3_d6_d7[i/4];
-
-						break;
-					case 2:
-						u_64_pe_d[0][0] = local_C_pe4_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe4_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe4_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe4_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe5_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe5_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe5_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe5_d6_d7[i/4];
-
-						break;
-					case 3:
-						u_64_pe_d[0][0] = local_C_pe6_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe6_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe6_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe6_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe7_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe7_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe7_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe7_d6_d7[i/4];
-
-						break;
+				for (int pe = 0; pe < 2; ++pe) {
+					for (int d = 0; d < NUM_CH_B; ++d) {
+						u_64_pe_d[pe][d] = local_C[i % NUM_CH_B * 2 + pe][d][i / NUM_CH_B];
+					}
 				}
 
 				for (ap_uint<4> pe = 0; pe < 2; ++pe) {
