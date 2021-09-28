@@ -13,7 +13,7 @@ using std::endl;
 #endif
 
 const int WINDOW_SIZE = 4096;
-const int DEP_DIST_LOAD_STORE = 12;
+const int DEP_DIST_LOAD_STORE = 10;
 const int B_PARTITION_FACTOR = 4;
 const int URAM_DEPTH = 12288;
 
@@ -319,80 +319,80 @@ void PEG(
 	ap_uint<64> local_C_pe0_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe0_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe0_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe0_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe0_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe0_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe0_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe0_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe0_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe0_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe1_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe1_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe1_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe1_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe1_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe1_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe1_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe1_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe1_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe2_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe2_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe2_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe2_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe2_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe2_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe2_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe2_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe2_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe3_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe3_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe3_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe3_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe3_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe3_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe3_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe3_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe3_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe4_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe4_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe4_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe4_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe4_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe4_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe4_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe4_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe4_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe5_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe5_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe5_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe5_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe5_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe5_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe5_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe5_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe5_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe6_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe6_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe6_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe6_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe6_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe6_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe6_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe6_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe6_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe7_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe7_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe7_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe7_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe7_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe7_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe7_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe7_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe7_d6_d7 core=RAM_2P_URAM
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
@@ -1026,80 +1026,80 @@ void PEG_last(
 	ap_uint<64> local_C_pe0_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe0_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe0_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe0_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe0_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe0_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe0_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe0_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe0_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe0_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe1_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe1_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe1_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe1_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe1_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe1_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe1_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe1_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe1_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe1_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe2_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe2_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe2_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe2_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe2_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe2_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe2_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe2_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe2_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe2_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe3_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe3_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe3_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe3_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe3_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe3_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe3_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe3_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe3_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe3_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe4_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe4_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe4_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe4_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe4_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe4_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe4_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe4_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe4_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe4_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe5_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe5_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe5_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe5_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe5_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe5_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe5_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe5_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe5_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe5_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe6_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe6_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe6_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe6_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe6_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe6_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe6_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe6_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe6_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe6_d6_d7 core=RAM_2P_URAM
 
 	ap_uint<64> local_C_pe7_d0_d1[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d2_d3[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d4_d5[URAM_DEPTH];
 	ap_uint<64> local_C_pe7_d6_d7[URAM_DEPTH];
 
-#pragma HLS resource variable=local_C_pe7_d0_d1 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe7_d2_d3 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe7_d4_d5 core=RAM_2P_URAM latency=3
-#pragma HLS resource variable=local_C_pe7_d6_d7 core=RAM_2P_URAM latency=3
+#pragma HLS resource variable=local_C_pe7_d0_d1 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe7_d2_d3 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe7_d4_d5 core=RAM_2P_URAM
+#pragma HLS resource variable=local_C_pe7_d6_d7 core=RAM_2P_URAM
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
