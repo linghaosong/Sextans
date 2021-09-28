@@ -50,28 +50,15 @@ using std::vector;
 using std::min;
 using std::max;
 
-
-
-//const int N = 8;
-
 const int NUM_CH_SPARSE = 8;
-
 const int NUM_CH_B = 4;
-
 const int NUM_CH_C = 8;
-
 const int NUM_WINDOW_SIZE = 4096;
 
-
-
-
-
-
-int floor_eightx(int x) {
+int ceil_eightx(int x) {
     if (x <= 0) return 1;
     return ((x + 7) / 8) * 8;
 }
-
 
 
 int main(int argc, char **argv) {
@@ -97,7 +84,7 @@ int main(int argc, char **argv) {
     }
     
     char * filename_A = argv[2];
-    int N = floor_eightx(atoi(argv[3]));
+    int N = ceil_eightx(atoi(argv[3]));
     
     cout << "N = " << N <<  "\n";
     cout << "alpha = "  << ALPHA << "\n";
@@ -204,7 +191,7 @@ int main(int argc, char **argv) {
                                    WINDOE_SIZE=NUM_WINDOW_SIZE, //const int WINDOE_SIZE,
                                    edge_list_pes, //vector<vector<edge> > & edge_list_pes,
                                    edge_list_ptr, //vector<int> & edge_list_ptr,
-                                   12
+                                   10
                                    ); //const int DEP_DIST_LOAD_STORE = 10)
     
     vector<unsigned int, aligned_allocator<unsigned int> > edge_list_ptr_fpga;
@@ -569,4 +556,3 @@ int main(int argc, char **argv) {
 
     return EXIT_SUCCESS;
 }
-
