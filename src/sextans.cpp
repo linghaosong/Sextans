@@ -2,42 +2,15 @@
 #include <cstdio>
 #include <cstring>
 #include <cassert>
-#include <hls_stream.h>
 
-//#define DEBUG_PRINT_KERNEL
+#include <tapa.h>
 
-#ifdef DEBUG_PRINT_KERNEL
-#include <iostream>
-using std::cout;
-using std::endl;
-#endif
+#include "sextans.h"
 
 const int WINDOW_SIZE = 4096;
 const int DEP_DIST_LOAD_STORE = 10;
 const int B_PARTITION_FACTOR = 4;
 const int URAM_DEPTH = 12288;
-
-template<class T>
-T HLS_REG(T in) {
-#pragma HLS pipeline
-#pragma HLS inline off
-#pragma HLS interface port=return register
-	return in;
-}
-
-float uint32_to_float(ap_uint<32> u) {
-#pragma HLS inline  
-#pragma HLS pipeline
-	float * tmpPointer_v = (float*) & u;
-	return (*tmpPointer_v);
-}
-
-ap_uint<32> float_to_uint32(float u) {
-#pragma HLS inline  
-#pragma HLS pipeline
-	ap_uint<32> * tmpPointer_v = (ap_uint<32>*) & u;
-	return (*tmpPointer_v);
-}
 
 void read_edge_list_ptr(
 	const ap_uint<32> num_ite_in,
@@ -46,8 +19,8 @@ void read_edge_list_ptr(
 	const ap_uint<32> K_in,
 	const ap_uint<32> alpha_u_in,
 	const ap_uint<32> beta_u_in,
-	const ap_uint<32> *edge_list_ptr,
-	hls::stream<ap_uint<32> > & fifo_edge_list_ptr
+	tapa::mmap<ap_uint<32>> edge_list_ptr,
+	tapa::ostream<ap_uint<32>> & fifo_edge_list_ptr
 	) {
 	const ap_uint<32> num_ite = num_ite_in;
 	fifo_edge_list_ptr.write(num_ite);
@@ -75,7 +48,7 @@ void read_edge_list_ptr(
 #pragma HLS loop_tripcount min=1 max=16
 			rd_ptr: for(ap_uint<32> i = 0; i < num_ite + 1; i++) {
 #pragma HLS loop_tripcount min=1 max=800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				ap_uint<32> tmp = edge_list_ptr[i];
 				fifo_edge_list_ptr.write(tmp);
 			}
@@ -83,10 +56,9 @@ void read_edge_list_ptr(
 	}
 }
 
-template <int ch>
 void read_A(
-	const ap_uint<512> *A,
-	hls::stream<ap_uint<512> > & fifo_A,
+	tapa::async_mmap<ap_uint<512>> A,
+	tapa::ostream<ap_uint<512>> & fifo_A,
 	const ap_uint<32> A_len,
 	const ap_uint<32> P_N
 	) {
@@ -100,49 +72,59 @@ void read_A(
 		l_N: for(ap_uint<32> nn = 0; nn < (N + 7)/8; nn++) {
 #pragma HLS loop_flatten off
 #pragma HLS loop_tripcount min=1 max=16
-			rd_A: for(ap_uint<32> i = 0; i < A_len; i++) {
+			rd_A: for(ap_uint<32> i_req = 0, i_resp = 0; i_resp < A_len;) {
 #pragma HLS loop_tripcount min=1 max=10000
-#pragma HLS pipeline
-				ap_uint<512> tmp_A = A[i];
-				fifo_A.write(tmp_A);
+#pragma HLS pipeline II=1
+				if (i_req < A_len &&
+				    i_req < i_resp + 64 &&
+						A.read_addr.try_write(i_req)) {
+					++i_req;
+				}
+				if (!fifo_A.full() && !A.read_data.empty()) {
+					fifo_A.try_write(A.read_data.read(nullptr));
+					++i_resp;
+				}
 			}
 		}
 	}
 }
 
-template <int chb>
 void read_B(
-	const ap_uint<512>* B,
-	hls::stream<ap_uint<512> > & fifo_B,
+	tapa::async_mmap<ap_uint<512>> B,
+	tapa::ostream<ap_uint<512>> & fifo_B,
 	const ap_uint<32> K,
 	const ap_uint<32> P_N
 	) {
 	const ap_uint<16> N16 = P_N(31, 16);
 	const ap_uint<16> rp_time = (N16 == 0)? ((ap_uint<16>) 1) : N16;
-	const ap_uint<32> N = P_N & ((ap_uint<32>) 0x0000FFFF);	
+	const ap_uint<32> N = P_N & ((ap_uint<32>) 0x0000FFFF);
 	const ap_uint<32> num_ite_B = ((K + 7) / 8) * ((N + 7) / 8);
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
 #pragma HLS loop_tripcount min=1 max=16
-		rd_B: for(ap_uint<32> i = 0; i < num_ite_B; i++) {
+		rd_B: for(ap_uint<32> i_req = 0, i_resp = 0; i_resp < num_ite_B;) {
 #pragma HLS loop_tripcount min=1 max=500000
-#pragma HLS pipeline
-			ap_uint<512> tmp_B = B[i];
-			fifo_B.write(tmp_B);
+#pragma HLS pipeline II=1
+			if (i_req < num_ite_B &&
+					i_req < i_resp + 64 &&
+					B.read_addr.try_write(i_req)) {
+				++i_req;
+			}
+			if (!fifo_B.full() && !B.read_data.empty()) {
+				fifo_B.try_write(B.read_data.read(nullptr));
+				++i_resp;
+			}
 		}
 	}
 }
 
-
-template <int ch>
 void PU2core(
     ap_uint<18> & addr_c,
-    float & a_val_f,
-    float & b_val_d0_f,
-    float & b_val_d1_f,
-             
-    ap_uint<64> * local_C_pe0_d0_d1
+    float a_val_f,
+    float b_val_d0_f,
+    float b_val_d1_f,
+    ap_uint<64> local_C_pe0_d0_d1[URAM_DEPTH]
     ) {
 #pragma HLS inline
     ap_uint<64> c_val_d0_d1_u64 = local_C_pe0_d0_d1[addr_c];
@@ -150,95 +132,41 @@ void PU2core(
     ap_uint<32> c_val_d0_u = c_val_d0_d1_u64(31,  0);
     ap_uint<32> c_val_d1_u = c_val_d0_d1_u64(63, 32);
 
-    float c_val_d0_f = uint32_to_float(c_val_d0_u);
-    float c_val_d1_f = uint32_to_float(c_val_d1_u);
-    
-    c_val_d0_f += HLS_REG(a_val_f) * b_val_d0_f;
-    c_val_d1_f += HLS_REG(a_val_f) * b_val_d1_f;
-    
-    c_val_d0_u = float_to_uint32(c_val_d0_f);
-    c_val_d1_u = float_to_uint32(c_val_d1_f);
-    
+    float c_val_d0_f = tapa::bit_cast<float>(c_val_d0_u);
+    float c_val_d1_f = tapa::bit_cast<float>(c_val_d1_u);
+
+    c_val_d0_f += tapa::reg(a_val_f) * b_val_d0_f;
+    c_val_d1_f += tapa::reg(a_val_f) * b_val_d1_f;
+
+    c_val_d0_u = tapa::bit_cast<ap_uint<32>>(c_val_d0_f);
+    c_val_d1_u = tapa::bit_cast<ap_uint<32>>(c_val_d1_f);
+
     c_val_d0_d1_u64(31,  0) = c_val_d0_u;
     c_val_d0_d1_u64(63, 32) = c_val_d1_u;
-    
+
     local_C_pe0_d0_d1[addr_c] = c_val_d0_d1_u64;
 }
 
-
-template <int ch>
 void PEcore(
     ap_uint<14> & addr_b,
     ap_uint<18> & addr_c,
     ap_uint<32> & a_val_u,
-
-    ap_uint<64> * local_C_pe0_d0_d1,
-    ap_uint<64> * local_C_pe0_d2_d3,
-    ap_uint<64> * local_C_pe0_d4_d5,
-    ap_uint<64> * local_C_pe0_d6_d7,
-
-    ap_uint<32> * local_B_pe0_pe1_d0,
-    ap_uint<32> * local_B_pe0_pe1_d1,
-    ap_uint<32> * local_B_pe0_pe1_d2,
-    ap_uint<32> * local_B_pe0_pe1_d3,
-    ap_uint<32> * local_B_pe0_pe1_d4,
-    ap_uint<32> * local_B_pe0_pe1_d5,
-    ap_uint<32> * local_B_pe0_pe1_d6,
-    ap_uint<32> * local_B_pe0_pe1_d7
+    ap_uint<64> local_C[NUM_CH_C / 2][URAM_DEPTH],
+		ap_uint<32> local_B[NUM_CH_C][WINDOW_SIZE]
     ) {
 #pragma HLS inline
     if (addr_c != ((ap_uint<18>) 0x3FFFF)) {
-        float a_val_f = uint32_to_float(a_val_u);
-        
-        ap_uint<32> b_val_d0_u = local_B_pe0_pe1_d0[addr_b];
-        ap_uint<32> b_val_d1_u = local_B_pe0_pe1_d1[addr_b];
-        ap_uint<32> b_val_d2_u = local_B_pe0_pe1_d2[addr_b];
-        ap_uint<32> b_val_d3_u = local_B_pe0_pe1_d3[addr_b];
-        ap_uint<32> b_val_d4_u = local_B_pe0_pe1_d4[addr_b];
-        ap_uint<32> b_val_d5_u = local_B_pe0_pe1_d5[addr_b];
-        ap_uint<32> b_val_d6_u = local_B_pe0_pe1_d6[addr_b];
-        ap_uint<32> b_val_d7_u = local_B_pe0_pe1_d7[addr_b];
-        
-        float b_val_d0_f = uint32_to_float(b_val_d0_u);
-        float b_val_d1_f = uint32_to_float(b_val_d1_u);
-        float b_val_d2_f = uint32_to_float(b_val_d2_u);
-        float b_val_d3_f = uint32_to_float(b_val_d3_u);
-        float b_val_d4_f = uint32_to_float(b_val_d4_u);
-        float b_val_d5_f = uint32_to_float(b_val_d5_u);
-        float b_val_d6_f = uint32_to_float(b_val_d6_u);
-        float b_val_d7_f = uint32_to_float(b_val_d7_u);
-        
-        PU2core<0>(
-            addr_c,
-            a_val_f,
-            b_val_d0_f,
-            b_val_d1_f,
-            local_C_pe0_d0_d1
-            );
-	    
-        PU2core<1>(
-            addr_c,
-            a_val_f,
-            b_val_d2_f,
-            b_val_d3_f,
-            local_C_pe0_d2_d3
-            );
-        
-        PU2core<2>(
-            addr_c,
-            a_val_f,
-            b_val_d4_f,
-            b_val_d5_f,
-            local_C_pe0_d4_d5
-            );
-        
-        PU2core<3>(
-            addr_c,
-            a_val_f,
-            b_val_d6_f,
-            b_val_d7_f,
-            local_C_pe0_d6_d7
-            );
+        float a_val_f = tapa::bit_cast<float>(a_val_u);
+
+        for (int i = 0; i < NUM_CH_C / 2; ++i) {
+          PU2core(
+              addr_c,
+              a_val_f,
+              tapa::bit_cast<float>(local_B[i*2+0][addr_b]),
+              tapa::bit_cast<float>(local_B[i*2+1][addr_b]),
+              local_C[i]
+              );
+        }
     }
 }
 
@@ -249,37 +177,29 @@ void peg16mult(
 	ap_uint<512> & mult512
 	) {
 #pragma HLS inline
-#pragma HLS pipeline
-		float alpha_f = uint32_to_float(alpha_u);
+		float alpha_f = tapa::bit_cast<float>(alpha_u);
 		ap_uint<512> c_out;
 
 		float op_a[16];
-#pragma HLS array_partition variable=op_ab complete
+#pragma HLS array_partition variable=op_a complete
 		float op_result[16];
 #pragma HLS array_partition variable=op_result complete
 
 		for(ap_uint<5> p = 0; p < 16; ++p) {
-			op_a[p]      = uint32_to_float(opa512(31 + p * 32, p * 32));
-			op_result[p] = HLS_REG(alpha_f) * op_a[p];
-			c_out(31 + p * 32, p * 32) = float_to_uint32(op_result[p]);
+			op_a[p]      = tapa::bit_cast<float>(opa512(31 + p * 32, p * 32).to_uint());
+			op_result[p] = tapa::reg(alpha_f) * op_a[p];
+			c_out(31 + p * 32, p * 32) = tapa::bit_cast<ap_uint<32>>(op_result[p]);
 		}
-		mult512 = HLS_REG(c_out);
+		mult512 = tapa::reg(c_out);
 }
 
-template <int ch>
 void PEG(
-	hls::stream<ap_uint<32> > & fifo_inst,
-	hls::stream<ap_uint<512> > & fifo_A,
-	hls::stream<ap_uint<512> > & fifo_B_x0, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x1, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x2, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x3, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<32> > & fifo_inst_out, // to next PE
-	hls::stream<ap_uint<512> > & fifo_B_out_x0, // output to next PE [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_out_x1, // output to next PE [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_out_x2, // output to next PE [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_out_x3, // output to next PE [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
+	tapa::istream<ap_uint<32>> & fifo_inst,
+	tapa::istream<ap_uint<512>> & fifo_A,
+	tapa::istreams<ap_uint<512>, NUM_CH_B> & fifo_B_x, // [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<32>> & fifo_inst_out, // to next PE
+	tapa::ostreams<ap_uint<512>, NUM_CH_B> & fifo_B_out_x, // output to next PE [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512>> & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
 	) {
 #pragma HLS inline off
 	ap_uint<32> NUM_ITE;
@@ -292,10 +212,10 @@ void PEG(
 	ap_uint<32> parameter;
 	w_ITE: for (ap_uint<3> i = 0; i < 6; ) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-		bool parameter_ready = fifo_inst.read_nb(parameter);
+#pragma HLS pipeline II=1
+		bool parameter_ready = fifo_inst.try_read(parameter);
 		if (parameter_ready) {
-			ap_uint<32> parameter_dealy = HLS_REG(parameter);
+			ap_uint<32> parameter_dealy = tapa::reg(parameter);
 			switch (i) {
 				case 0: NUM_ITE = parameter_dealy; break;
 				case 1: M = parameter_dealy; break;
@@ -314,85 +234,10 @@ void PEG(
 	const ap_uint<32> N = P_N & ((ap_uint<32>) 0x0000FFFF);
 
 	//define local C buffer and pragma to URAM
-	ap_uint<64> local_C_pe0_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe0_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe1_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe1_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe2_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe2_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe3_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe3_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe4_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe4_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe5_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe5_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe6_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe6_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe7_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe7_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d6_d7 core=RAM_2P_URAM
+	ap_uint<64> local_C[NUM_CH_SPARSE][NUM_CH_C / 2][URAM_DEPTH];
+#pragma HLS bind_storage variable=local_C type=RAM_2P impl=URAM
+#pragma HLS array_partition complete variable=local_C dim=1
+#pragma HLS array_partition complete variable=local_C dim=2
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
@@ -404,157 +249,22 @@ void PEG(
 			//init local C
 			init_C: for (ap_uint<32> i = 0; i < ((M + 63) / 64); ++i) {
 #pragma HLS loop_tripcount min=1 max=800
-#pragma HLS pipeline
-				local_C_pe0_d0_d1[i] = 0;
-				local_C_pe0_d2_d3[i] = 0;
-				local_C_pe0_d4_d5[i] = 0;
-				local_C_pe0_d6_d7[i] = 0;
-				local_C_pe1_d0_d1[i] = 0;
-				local_C_pe1_d2_d3[i] = 0;
-				local_C_pe1_d4_d5[i] = 0;
-				local_C_pe1_d6_d7[i] = 0;
-				local_C_pe2_d0_d1[i] = 0;
-				local_C_pe2_d2_d3[i] = 0;
-				local_C_pe2_d4_d5[i] = 0;
-				local_C_pe2_d6_d7[i] = 0;
-				local_C_pe3_d0_d1[i] = 0;
-				local_C_pe3_d2_d3[i] = 0;
-				local_C_pe3_d4_d5[i] = 0;
-				local_C_pe3_d6_d7[i] = 0;
-				local_C_pe4_d0_d1[i] = 0;
-				local_C_pe4_d2_d3[i] = 0;
-				local_C_pe4_d4_d5[i] = 0;
-				local_C_pe4_d6_d7[i] = 0;
-				local_C_pe5_d0_d1[i] = 0;
-				local_C_pe5_d2_d3[i] = 0;
-				local_C_pe5_d4_d5[i] = 0;
-				local_C_pe5_d6_d7[i] = 0;
-				local_C_pe6_d0_d1[i] = 0;
-				local_C_pe6_d2_d3[i] = 0;
-				local_C_pe6_d4_d5[i] = 0;
-				local_C_pe6_d6_d7[i] = 0;
-				local_C_pe7_d0_d1[i] = 0;
-				local_C_pe7_d2_d3[i] = 0;
-				local_C_pe7_d4_d5[i] = 0;
-				local_C_pe7_d6_d7[i] = 0;
+#pragma HLS pipeline II=1
+				for (int j = 0; j < NUM_CH_SPARSE; ++j) {
+					for (int k = 0; k < NUM_CH_C / 2; ++k) {
+						local_C[j][k][i] = 0;
+					}
+				}
 			}
 			//define local B buffer and pragma local B buffer if partition factor > 1
 
-			ap_uint<32> local_B_pe0_pe1_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d7[WINDOW_SIZE];
+			ap_uint<32> local_B[NUM_CH_SPARSE/2][NUM_CH_C][WINDOW_SIZE];
+#pragma HLS bind_storage variable=local_B latency=3
+#pragma HLS array_partition variable=local_B complete dim=1
+#pragma HLS array_partition variable=local_B complete dim=2
+#pragma HLS array_partition variable=local_B cyclic factor=B_PARTITION_FACTOR dim=3
 
-#pragma HLS resource variable=local_B_pe0_pe1_d0 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d1 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d2 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d3 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d4 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d5 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d6 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe0_pe1_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe2_pe3_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d7[WINDOW_SIZE];
-
-#pragma HLS resource variable=local_B_pe2_pe3_d0 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d1 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d2 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d3 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d4 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d5 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d6 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe2_pe3_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe4_pe5_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d7[WINDOW_SIZE];
-
-#pragma HLS resource variable=local_B_pe4_pe5_d0 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d1 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d2 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d3 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d4 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d5 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d6 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe4_pe5_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe6_pe7_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d7[WINDOW_SIZE];
-
-#pragma HLS resource variable=local_B_pe6_pe7_d0 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d1 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d2 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d3 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d4 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d5 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d6 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe6_pe7_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> start_32;
-			bool start_32_ready = false;
-			w1: while(!start_32_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-				start_32_ready = fifo_inst.read_nb(start_32);
-			};
+			auto start_32 = fifo_inst.read();
 
 			fifo_inst_out.write(start_32);
 
@@ -562,159 +272,51 @@ void PEG(
 #pragma HLS loop_tripcount min=1 max=49
 
 				// fill onchip B
-				ap_uint<512> b_512_x0;
-				ap_uint<512> b_512_x1;
-				ap_uint<512> b_512_x2;
-				ap_uint<512> b_512_x3;
-
-				bool b_512_x0_ready = false;
-				bool b_512_x1_ready = false;
-				bool b_512_x2_ready = false;
-				bool b_512_x3_ready = false;
 
 				read_B: for (ap_uint<14> j = 0; (j < WINDOW_SIZE/8) && (j < (K + 7) / 8 - i*WINDOW_SIZE/8); ) {
 #pragma HLS loop_tripcount min=1 max=512
-#pragma HLS pipeline
-					if (!b_512_x0_ready) {
-						b_512_x0_ready = fifo_B_x0.read_nb(b_512_x0);
-					}
-					if (!b_512_x1_ready) {
-						b_512_x1_ready = fifo_B_x1.read_nb(b_512_x1);
-					}
-					if (!b_512_x2_ready) {
-						b_512_x2_ready = fifo_B_x2.read_nb(b_512_x2);
-					}
-					if (!b_512_x3_ready) {
-						b_512_x3_ready = fifo_B_x3.read_nb(b_512_x3);
-					}
+#pragma HLS pipeline II = 1
 
-					bool b_2048_ready = b_512_x0_ready && b_512_x1_ready && b_512_x2_ready && b_512_x3_ready;
+					bool b_2048_ready = true;
+          for (int k = 0; k < NUM_CH_B; ++k) {
+            b_2048_ready &= !fifo_B_x[k].empty();
+          }
 
 					if (b_2048_ready) {
-						ap_uint<512> b_512_x0_delay = HLS_REG(b_512_x0);
-						ap_uint<512> b_512_x1_delay = HLS_REG(b_512_x1);
-						ap_uint<512> b_512_x2_delay = HLS_REG(b_512_x2);
-						ap_uint<512> b_512_x3_delay = HLS_REG(b_512_x3);
+						ap_uint<512> b_512_x_delay[NUM_CH_B];
+#pragma HLS array_partition variable=b_512_x_delay complete
 
-						fifo_B_out_x0.write(b_512_x0_delay);
-						fifo_B_out_x1.write(b_512_x1_delay);
-						fifo_B_out_x2.write(b_512_x2_delay);
-						fifo_B_out_x3.write(b_512_x3_delay);
+            for (int k = 0; k < NUM_CH_B; ++k) {
+              b_512_x_delay[k] = tapa::reg(fifo_B_x[k].read(nullptr));
+						  fifo_B_out_x[k].write(b_512_x_delay[k]);
+            }
 
-						read_B_p: for (ap_uint<4> k = 0; k < 8; ++k) {
-							ap_uint<32> b_pe_d0 = b_512_x0_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d1 = b_512_x0_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d2 = b_512_x1_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d3 = b_512_x1_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d4 = b_512_x2_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d5 = b_512_x2_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d6 = b_512_x3_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d7 = b_512_x3_delay(31 + k * 32 + 256,  k * 32 + 256);
-
-							local_B_pe0_pe1_d0[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d0;
-							local_B_pe0_pe1_d1[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d1;
-							local_B_pe0_pe1_d2[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d2;
-							local_B_pe0_pe1_d3[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d3;
-							local_B_pe0_pe1_d4[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d4;
-							local_B_pe0_pe1_d5[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d5;
-							local_B_pe0_pe1_d6[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d6;
-							local_B_pe0_pe1_d7[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d7;
-
-							local_B_pe2_pe3_d0[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d0;
-							local_B_pe2_pe3_d1[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d1;
-							local_B_pe2_pe3_d2[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d2;
-							local_B_pe2_pe3_d3[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d3;
-							local_B_pe2_pe3_d4[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d4;
-							local_B_pe2_pe3_d5[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d5;
-							local_B_pe2_pe3_d6[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d6;
-							local_B_pe2_pe3_d7[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d7;
-
-							local_B_pe4_pe5_d0[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d0;
-							local_B_pe4_pe5_d1[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d1;
-							local_B_pe4_pe5_d2[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d2;
-							local_B_pe4_pe5_d3[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d3;
-							local_B_pe4_pe5_d4[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d4;
-							local_B_pe4_pe5_d5[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d5;
-							local_B_pe4_pe5_d6[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d6;
-							local_B_pe4_pe5_d7[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d7;
-
-							local_B_pe6_pe7_d0[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d0;
-							local_B_pe6_pe7_d1[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d1;
-							local_B_pe6_pe7_d2[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d2;
-							local_B_pe6_pe7_d3[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d3;
-							local_B_pe6_pe7_d4[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d4;
-							local_B_pe6_pe7_d5[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d5;
-							local_B_pe6_pe7_d6[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d6;
-							local_B_pe6_pe7_d7[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d7;
+						read_B_p: for (ap_uint<4> k = 0; k < B_PARTITION_FACTOR * 2; ++k) {
+              for (int l = 0; l < NUM_CH_SPARSE / 2; ++l) {
+                for (int m = 0; m < NUM_CH_C; ++m) {
+                  local_B[l][m][tapa::reg(tapa::reg(j)) * B_PARTITION_FACTOR * 2 + k] = b_512_x_delay[m/2](31 + k * 32 + m % 2 * 256,  k * 32 + m % 2 * 256);
+                }
+              }
 						}
-						b_512_x0_ready = false;
-						b_512_x1_ready = false;
-						b_512_x2_ready = false;
-						b_512_x3_ready = false;
 						++j;
 					}
 				}
 
 				// computation
-				ap_uint<32> end_32;
-				bool end_32_ready = false;
-				w2: while(!end_32_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-					end_32_ready = fifo_inst.read_nb(end_32);
-				};
+				const auto end_32 = fifo_inst.read();
 
 				fifo_inst_out.write(end_32);
 
 				computation: for (ap_uint<32> j = start_32; j < end_32; ) {
 #pragma HLS loop_tripcount min=1 max=200
-#pragma HLS pipeline
-
-#pragma HLS dependence true variable=local_C_pe0_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe1_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe2_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe3_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe4_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe5_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe6_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe7_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d6_d7 distance=DEP_DIST_LOAD_STORE
+#pragma HLS pipeline II=1
+#pragma HLS dependence true variable=local_C distance=DEP_DIST_LOAD_STORE
 
 					ap_uint<512> a_pes;
-					bool a_pes_ready = fifo_A.read_nb(a_pes);
+					bool a_pes_ready = fifo_A.try_read(a_pes);
 
 					if (a_pes_ready) {
-						ap_uint<512> a_pes_delay = HLS_REG(a_pes);
+						ap_uint<512> a_pes_delay = tapa::reg(a_pes);
 
 						ap_uint<64> a[8];
 #pragma HLS array_partition variable=a complete
@@ -739,149 +341,15 @@ void PEG(
 						}
 
 						// PE process
-						PEcore<0>(
-							a_col[0],
-							a_row[0],
-							a_val[0],
-							local_C_pe0_d0_d1,
-							local_C_pe0_d2_d3,
-							local_C_pe0_d4_d5,
-							local_C_pe0_d6_d7,
-							local_B_pe0_pe1_d0,
-							local_B_pe0_pe1_d1,
-							local_B_pe0_pe1_d2,
-							local_B_pe0_pe1_d3,
-							local_B_pe0_pe1_d4,
-							local_B_pe0_pe1_d5,
-							local_B_pe0_pe1_d6,
-							local_B_pe0_pe1_d7
-							);
-
-						PEcore<1>(
-							a_col[1],
-							a_row[1],
-							a_val[1],
-							local_C_pe1_d0_d1,
-							local_C_pe1_d2_d3,
-							local_C_pe1_d4_d5,
-							local_C_pe1_d6_d7,
-							local_B_pe0_pe1_d0,
-							local_B_pe0_pe1_d1,
-							local_B_pe0_pe1_d2,
-							local_B_pe0_pe1_d3,
-							local_B_pe0_pe1_d4,
-							local_B_pe0_pe1_d5,
-							local_B_pe0_pe1_d6,
-							local_B_pe0_pe1_d7
-							);
-
-						PEcore<2>(
-							a_col[2],
-							a_row[2],
-							a_val[2],
-							local_C_pe2_d0_d1,
-							local_C_pe2_d2_d3,
-							local_C_pe2_d4_d5,
-							local_C_pe2_d6_d7,
-							local_B_pe2_pe3_d0,
-							local_B_pe2_pe3_d1,
-							local_B_pe2_pe3_d2,
-							local_B_pe2_pe3_d3,
-							local_B_pe2_pe3_d4,
-							local_B_pe2_pe3_d5,
-							local_B_pe2_pe3_d6,
-							local_B_pe2_pe3_d7
-							);
-
-						PEcore<3>(
-							a_col[3],
-							a_row[3],
-							a_val[3],
-							local_C_pe3_d0_d1,
-							local_C_pe3_d2_d3,
-							local_C_pe3_d4_d5,
-							local_C_pe3_d6_d7,
-							local_B_pe2_pe3_d0,
-							local_B_pe2_pe3_d1,
-							local_B_pe2_pe3_d2,
-							local_B_pe2_pe3_d3,
-							local_B_pe2_pe3_d4,
-							local_B_pe2_pe3_d5,
-							local_B_pe2_pe3_d6,
-							local_B_pe2_pe3_d7
-							);
-
-						PEcore<4>(
-							a_col[4],
-							a_row[4],
-							a_val[4],
-							local_C_pe4_d0_d1,
-							local_C_pe4_d2_d3,
-							local_C_pe4_d4_d5,
-							local_C_pe4_d6_d7,
-							local_B_pe4_pe5_d0,
-							local_B_pe4_pe5_d1,
-							local_B_pe4_pe5_d2,
-							local_B_pe4_pe5_d3,
-							local_B_pe4_pe5_d4,
-							local_B_pe4_pe5_d5,
-							local_B_pe4_pe5_d6,
-							local_B_pe4_pe5_d7
-							);
-
-						PEcore<5>(
-							a_col[5],
-							a_row[5],
-							a_val[5],
-							local_C_pe5_d0_d1,
-							local_C_pe5_d2_d3,
-							local_C_pe5_d4_d5,
-							local_C_pe5_d6_d7,
-							local_B_pe4_pe5_d0,
-							local_B_pe4_pe5_d1,
-							local_B_pe4_pe5_d2,
-							local_B_pe4_pe5_d3,
-							local_B_pe4_pe5_d4,
-							local_B_pe4_pe5_d5,
-							local_B_pe4_pe5_d6,
-							local_B_pe4_pe5_d7
-							);
-
-						PEcore<6>(
-							a_col[6],
-							a_row[6],
-							a_val[6],
-							local_C_pe6_d0_d1,
-							local_C_pe6_d2_d3,
-							local_C_pe6_d4_d5,
-							local_C_pe6_d6_d7,
-							local_B_pe6_pe7_d0,
-							local_B_pe6_pe7_d1,
-							local_B_pe6_pe7_d2,
-							local_B_pe6_pe7_d3,
-							local_B_pe6_pe7_d4,
-							local_B_pe6_pe7_d5,
-							local_B_pe6_pe7_d6,
-							local_B_pe6_pe7_d7
-							);
-
-						PEcore<7>(
-							a_col[7],
-							a_row[7],
-							a_val[7],
-							local_C_pe7_d0_d1,
-							local_C_pe7_d2_d3,
-							local_C_pe7_d4_d5,
-							local_C_pe7_d6_d7,
-							local_B_pe6_pe7_d0,
-							local_B_pe6_pe7_d1,
-							local_B_pe6_pe7_d2,
-							local_B_pe6_pe7_d3,
-							local_B_pe6_pe7_d4,
-							local_B_pe6_pe7_d5,
-							local_B_pe6_pe7_d6,
-							local_B_pe6_pe7_d7
-							);
+						for (int l = 0; l < NUM_CH_SPARSE; ++l) {
+							PEcore(
+								a_col[l],
+								a_row[l],
+								a_val[l],
+								local_C[l],
+								local_B[l/2]
+								);
+						}
 
 						++j;
 					}
@@ -894,62 +362,17 @@ void PEG(
 			//write C fifo
 			write_C_outer: for (ap_uint<32> i = 0; i < (M + 15)/16; ++i) {
 #pragma HLS loop_tripcount min=1 max=1800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				ap_uint<64> u_64_pe_d[2][4];
 #pragma HLS array_partition variable=u_64_pe_d complete
 
 				ap_uint<32> u_32_d_pe[8][2];
 #pragma HLS array_partition variable=u_32_d_pe complete
 
-				switch (i % 4) {
-					case 0:
-						u_64_pe_d[0][0] = local_C_pe0_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe0_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe0_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe0_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe1_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe1_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe1_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe1_d6_d7[i/4];
-
-						break;
-					case 1:
-						u_64_pe_d[0][0] = local_C_pe2_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe2_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe2_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe2_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe3_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe3_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe3_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe3_d6_d7[i/4];
-
-						break;
-					case 2:
-						u_64_pe_d[0][0] = local_C_pe4_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe4_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe4_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe4_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe5_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe5_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe5_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe5_d6_d7[i/4];
-
-						break;
-					case 3:
-						u_64_pe_d[0][0] = local_C_pe6_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe6_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe6_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe6_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe7_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe7_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe7_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe7_d6_d7[i/4];
-
-						break;
+				for (int pe = 0; pe < 2; ++pe) {
+					for (int d = 0; d < NUM_CH_B; ++d) {
+						u_64_pe_d[pe][d] = local_C[i % NUM_CH_B * 2 + pe][d][i / NUM_CH_B];
+					}
 				}
 
 				for (ap_uint<4> pe = 0; pe < 2; ++pe) {
@@ -973,15 +396,12 @@ void PEG(
 	}
 }
 
-template <int ch>
+
 void PEG_last(
-	hls::stream<ap_uint<32> > & fifo_inst,
-	hls::stream<ap_uint<512> > & fifo_A,
-	hls::stream<ap_uint<512> > & fifo_B_x0, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x1, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x2, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_B_x3, // [256(16)] * 2, 2: dim d
-	hls::stream<ap_uint<512> > & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
+	tapa::istream<ap_uint<32>> & fifo_inst,
+	tapa::istream<ap_uint<512>> & fifo_A,
+	tapa::istreams<ap_uint<512>, NUM_CH_B> & fifo_B_x, // [256(16)] * 2, 2: dim d
+	tapa::ostream<ap_uint<512>> & fifo_C_out0 // [64(32bits * 2.0)] * 8 dims
 	) {
 #pragma HLS inline off
 	ap_uint<32> NUM_ITE;
@@ -994,10 +414,10 @@ void PEG_last(
 	ap_uint<32> parameter;
 	w_ITE: for (ap_uint<3> i = 0; i < 6; ) {
 #pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-		bool parameter_ready = fifo_inst.read_nb(parameter);
+#pragma HLS pipeline II=1
+		bool parameter_ready = fifo_inst.try_read(parameter);
 		if (parameter_ready) {
-			ap_uint<32> parameter_dealy = HLS_REG(parameter);
+			ap_uint<32> parameter_dealy = tapa::reg(parameter);
 			switch (i) {
 				case 0: NUM_ITE = parameter_dealy; break;
 				case 1: M = parameter_dealy; break;
@@ -1021,85 +441,10 @@ void PEG_last(
 	fifo_C_out0.write(MN512);
 
 	//define local C buffer and pragma to URAM
-	ap_uint<64> local_C_pe0_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe0_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe0_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe0_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe1_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe1_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe1_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe1_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe2_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe2_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe2_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe2_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe3_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe3_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe3_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe3_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe4_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe4_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe4_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe4_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe5_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe5_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe5_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe5_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe6_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe6_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe6_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe6_d6_d7 core=RAM_2P_URAM
-
-	ap_uint<64> local_C_pe7_d0_d1[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d2_d3[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d4_d5[URAM_DEPTH];
-	ap_uint<64> local_C_pe7_d6_d7[URAM_DEPTH];
-
-#pragma HLS resource variable=local_C_pe7_d0_d1 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d2_d3 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d4_d5 core=RAM_2P_URAM
-#pragma HLS resource variable=local_C_pe7_d6_d7 core=RAM_2P_URAM
+	ap_uint<64> local_C[NUM_CH_SPARSE][NUM_CH_C / 2][URAM_DEPTH];
+#pragma HLS bind_storage variable=local_C type=RAM_2P impl=URAM
+#pragma HLS array_partition complete variable=local_C dim=1
+#pragma HLS array_partition complete variable=local_C dim=2
 
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
@@ -1111,309 +456,69 @@ void PEG_last(
 			//init local C
 			init_C: for (ap_uint<32> i = 0; i < ((M + 63) / 64); ++i) {
 #pragma HLS loop_tripcount min=1 max=800
-#pragma HLS pipeline
-				local_C_pe0_d0_d1[i] = 0;
-				local_C_pe0_d2_d3[i] = 0;
-				local_C_pe0_d4_d5[i] = 0;
-				local_C_pe0_d6_d7[i] = 0;
-				local_C_pe1_d0_d1[i] = 0;
-				local_C_pe1_d2_d3[i] = 0;
-				local_C_pe1_d4_d5[i] = 0;
-				local_C_pe1_d6_d7[i] = 0;
-				local_C_pe2_d0_d1[i] = 0;
-				local_C_pe2_d2_d3[i] = 0;
-				local_C_pe2_d4_d5[i] = 0;
-				local_C_pe2_d6_d7[i] = 0;
-				local_C_pe3_d0_d1[i] = 0;
-				local_C_pe3_d2_d3[i] = 0;
-				local_C_pe3_d4_d5[i] = 0;
-				local_C_pe3_d6_d7[i] = 0;
-				local_C_pe4_d0_d1[i] = 0;
-				local_C_pe4_d2_d3[i] = 0;
-				local_C_pe4_d4_d5[i] = 0;
-				local_C_pe4_d6_d7[i] = 0;
-				local_C_pe5_d0_d1[i] = 0;
-				local_C_pe5_d2_d3[i] = 0;
-				local_C_pe5_d4_d5[i] = 0;
-				local_C_pe5_d6_d7[i] = 0;
-				local_C_pe6_d0_d1[i] = 0;
-				local_C_pe6_d2_d3[i] = 0;
-				local_C_pe6_d4_d5[i] = 0;
-				local_C_pe6_d6_d7[i] = 0;
-				local_C_pe7_d0_d1[i] = 0;
-				local_C_pe7_d2_d3[i] = 0;
-				local_C_pe7_d4_d5[i] = 0;
-				local_C_pe7_d6_d7[i] = 0;
+#pragma HLS pipeline II=1
+				for (int j = 0; j < NUM_CH_SPARSE; ++j) {
+					for (int k = 0; k < NUM_CH_C / 2; ++k) {
+						local_C[j][k][i] = 0;
+					}
+				}
 			}
 			//define local B buffer and pragma local B buffer if partition factor > 1
 
-			ap_uint<32> local_B_pe0_pe1_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe0_pe1_d7[WINDOW_SIZE];
+			ap_uint<32> local_B[NUM_CH_SPARSE/2][NUM_CH_C][WINDOW_SIZE];
+#pragma HLS bind_storage variable=local_B latency=3
+#pragma HLS array_partition variable=local_B complete dim=1
+#pragma HLS array_partition variable=local_B complete dim=2
+#pragma HLS array_partition variable=local_B cyclic factor=B_PARTITION_FACTOR dim=3
 
-#pragma HLS resource variable=local_B_pe0_pe1_d0 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d1 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d2 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d3 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d4 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d5 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d6 latency=3
-#pragma HLS resource variable=local_B_pe0_pe1_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe0_pe1_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe0_pe1_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe2_pe3_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe2_pe3_d7[WINDOW_SIZE];
-
-#pragma HLS resource variable=local_B_pe2_pe3_d0 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d1 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d2 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d3 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d4 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d5 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d6 latency=3
-#pragma HLS resource variable=local_B_pe2_pe3_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe2_pe3_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe2_pe3_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe4_pe5_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe4_pe5_d7[WINDOW_SIZE];
-
-#pragma HLS resource variable=local_B_pe4_pe5_d0 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d1 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d2 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d3 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d4 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d5 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d6 latency=3
-#pragma HLS resource variable=local_B_pe4_pe5_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe4_pe5_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe4_pe5_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> local_B_pe6_pe7_d0[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d1[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d2[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d3[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d4[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d5[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d6[WINDOW_SIZE];
-			ap_uint<32> local_B_pe6_pe7_d7[WINDOW_SIZE];
-
-#pragma HLS resource variable=local_B_pe6_pe7_d0 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d1 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d2 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d3 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d4 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d5 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d6 latency=3
-#pragma HLS resource variable=local_B_pe6_pe7_d7 latency=3
-
-#pragma HLS array_partition variable=local_B_pe6_pe7_d0 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d1 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d2 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d3 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d4 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d5 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d6 cyclic factor=B_PARTITION_FACTOR
-#pragma HLS array_partition variable=local_B_pe6_pe7_d7 cyclic factor=B_PARTITION_FACTOR
-
-			ap_uint<32> start_32;
-			bool start_32_ready = false;
-			w1: while(!start_32_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-				start_32_ready = fifo_inst.read_nb(start_32);
-			};
+			auto start_32 = fifo_inst.read();
 
 			main: for (ap_uint<32> i = 0; i < NUM_ITE; ++i) {
 #pragma HLS loop_tripcount min=1 max=49
 
 				// fill onchip B
-				ap_uint<512> b_512_x0;
-				ap_uint<512> b_512_x1;
-				ap_uint<512> b_512_x2;
-				ap_uint<512> b_512_x3;
-
-				bool b_512_x0_ready = false;
-				bool b_512_x1_ready = false;
-				bool b_512_x2_ready = false;
-				bool b_512_x3_ready = false;
 
 				read_B: for (ap_uint<14> j = 0; (j < WINDOW_SIZE/8) && (j < (K + 7) / 8 - i*WINDOW_SIZE/8); ) {
 #pragma HLS loop_tripcount min=1 max=512
-#pragma HLS pipeline
-					if (!b_512_x0_ready) {
-						b_512_x0_ready = fifo_B_x0.read_nb(b_512_x0);
-					}
-					if (!b_512_x1_ready) {
-						b_512_x1_ready = fifo_B_x1.read_nb(b_512_x1);
-					}
-					if (!b_512_x2_ready) {
-						b_512_x2_ready = fifo_B_x2.read_nb(b_512_x2);
-					}
-					if (!b_512_x3_ready) {
-						b_512_x3_ready = fifo_B_x3.read_nb(b_512_x3);
-					}
+#pragma HLS pipeline II=1
 
-					bool b_2048_ready = b_512_x0_ready && b_512_x1_ready && b_512_x2_ready && b_512_x3_ready;
+					bool b_2048_ready = true;
+          for (int k = 0; k < NUM_CH_B; ++k) {
+            b_2048_ready &= !fifo_B_x[k].empty();
+          }
 
 					if (b_2048_ready) {
-						ap_uint<512> b_512_x0_delay = HLS_REG(b_512_x0);
-						ap_uint<512> b_512_x1_delay = HLS_REG(b_512_x1);
-						ap_uint<512> b_512_x2_delay = HLS_REG(b_512_x2);
-						ap_uint<512> b_512_x3_delay = HLS_REG(b_512_x3);
+						ap_uint<512> b_512_x_delay[NUM_CH_B];
+#pragma HLS array_partition variable=b_512_x_delay complete
 
+            for (int k = 0; k < NUM_CH_B; ++k) {
+              b_512_x_delay[k] = tapa::reg(fifo_B_x[k].read(nullptr));
+            }
 
-						read_B_p: for (ap_uint<4> k = 0; k < 8; ++k) {
-							ap_uint<32> b_pe_d0 = b_512_x0_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d1 = b_512_x0_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d2 = b_512_x1_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d3 = b_512_x1_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d4 = b_512_x2_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d5 = b_512_x2_delay(31 + k * 32 + 256,  k * 32 + 256);
-							ap_uint<32> b_pe_d6 = b_512_x3_delay(31 + k * 32 +   0,  k * 32 +   0);
-							ap_uint<32> b_pe_d7 = b_512_x3_delay(31 + k * 32 + 256,  k * 32 + 256);
-
-							local_B_pe0_pe1_d0[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d0;
-							local_B_pe0_pe1_d1[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d1;
-							local_B_pe0_pe1_d2[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d2;
-							local_B_pe0_pe1_d3[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d3;
-							local_B_pe0_pe1_d4[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d4;
-							local_B_pe0_pe1_d5[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d5;
-							local_B_pe0_pe1_d6[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d6;
-							local_B_pe0_pe1_d7[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d7;
-
-							local_B_pe2_pe3_d0[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d0;
-							local_B_pe2_pe3_d1[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d1;
-							local_B_pe2_pe3_d2[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d2;
-							local_B_pe2_pe3_d3[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d3;
-							local_B_pe2_pe3_d4[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d4;
-							local_B_pe2_pe3_d5[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d5;
-							local_B_pe2_pe3_d6[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d6;
-							local_B_pe2_pe3_d7[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d7;
-
-							local_B_pe4_pe5_d0[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d0;
-							local_B_pe4_pe5_d1[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d1;
-							local_B_pe4_pe5_d2[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d2;
-							local_B_pe4_pe5_d3[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d3;
-							local_B_pe4_pe5_d4[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d4;
-							local_B_pe4_pe5_d5[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d5;
-							local_B_pe4_pe5_d6[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d6;
-							local_B_pe4_pe5_d7[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d7;
-
-							local_B_pe6_pe7_d0[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d0;
-							local_B_pe6_pe7_d1[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d1;
-							local_B_pe6_pe7_d2[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d2;
-							local_B_pe6_pe7_d3[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d3;
-							local_B_pe6_pe7_d4[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d4;
-							local_B_pe6_pe7_d5[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d5;
-							local_B_pe6_pe7_d6[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d6;
-							local_B_pe6_pe7_d7[HLS_REG(HLS_REG(j)) * 8 + k] = b_pe_d7;
+						read_B_p: for (ap_uint<4> k = 0; k < B_PARTITION_FACTOR * 2; ++k) {
+              for (int l = 0; l < NUM_CH_SPARSE / 2; ++l) {
+                for (int m = 0; m < NUM_CH_C; ++m) {
+                  local_B[l][m][tapa::reg(tapa::reg(j)) * B_PARTITION_FACTOR * 2 + k] = b_512_x_delay[m/2](31 + k * 32 + m % 2 * 256,  k * 32 + m % 2 * 256);
+                }
+              }
 						}
-						b_512_x0_ready = false;
-						b_512_x1_ready = false;
-						b_512_x2_ready = false;
-						b_512_x3_ready = false;
 						++j;
 					}
 				}
 
 				// computation
-				ap_uint<32> end_32;
-				bool end_32_ready = false;
-				w2: while(!end_32_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-					end_32_ready = fifo_inst.read_nb(end_32);
-				};
+				const auto end_32 = fifo_inst.read();
 
 				computation: for (ap_uint<32> j = start_32; j < end_32; ) {
 #pragma HLS loop_tripcount min=1 max=200
-#pragma HLS pipeline
-
-#pragma HLS dependence true variable=local_C_pe0_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe0_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe1_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe1_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe2_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe2_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe3_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe3_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe4_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe4_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe5_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe5_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe6_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe6_d6_d7 distance=DEP_DIST_LOAD_STORE
-
-#pragma HLS dependence true variable=local_C_pe7_d0_d1 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d2_d3 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d4_d5 distance=DEP_DIST_LOAD_STORE
-#pragma HLS dependence true variable=local_C_pe7_d6_d7 distance=DEP_DIST_LOAD_STORE
+#pragma HLS pipeline II=1
+#pragma HLS dependence true variable=local_C distance=DEP_DIST_LOAD_STORE
 
 					ap_uint<512> a_pes;
-					bool a_pes_ready = fifo_A.read_nb(a_pes);
+					bool a_pes_ready = fifo_A.try_read(a_pes);
 
 					if (a_pes_ready) {
-						ap_uint<512> a_pes_delay = HLS_REG(a_pes);
+						ap_uint<512> a_pes_delay = tapa::reg(a_pes);
 
 						ap_uint<64> a[8];
 #pragma HLS array_partition variable=a complete
@@ -1438,149 +543,15 @@ void PEG_last(
 						}
 
 						// PE process
-						PEcore<0>(
-							a_col[0],
-							a_row[0],
-							a_val[0],
-							local_C_pe0_d0_d1,
-							local_C_pe0_d2_d3,
-							local_C_pe0_d4_d5,
-							local_C_pe0_d6_d7,
-							local_B_pe0_pe1_d0,
-							local_B_pe0_pe1_d1,
-							local_B_pe0_pe1_d2,
-							local_B_pe0_pe1_d3,
-							local_B_pe0_pe1_d4,
-							local_B_pe0_pe1_d5,
-							local_B_pe0_pe1_d6,
-							local_B_pe0_pe1_d7
-							);
-
-						PEcore<1>(
-							a_col[1],
-							a_row[1],
-							a_val[1],
-							local_C_pe1_d0_d1,
-							local_C_pe1_d2_d3,
-							local_C_pe1_d4_d5,
-							local_C_pe1_d6_d7,
-							local_B_pe0_pe1_d0,
-							local_B_pe0_pe1_d1,
-							local_B_pe0_pe1_d2,
-							local_B_pe0_pe1_d3,
-							local_B_pe0_pe1_d4,
-							local_B_pe0_pe1_d5,
-							local_B_pe0_pe1_d6,
-							local_B_pe0_pe1_d7
-							);
-
-						PEcore<2>(
-							a_col[2],
-							a_row[2],
-							a_val[2],
-							local_C_pe2_d0_d1,
-							local_C_pe2_d2_d3,
-							local_C_pe2_d4_d5,
-							local_C_pe2_d6_d7,
-							local_B_pe2_pe3_d0,
-							local_B_pe2_pe3_d1,
-							local_B_pe2_pe3_d2,
-							local_B_pe2_pe3_d3,
-							local_B_pe2_pe3_d4,
-							local_B_pe2_pe3_d5,
-							local_B_pe2_pe3_d6,
-							local_B_pe2_pe3_d7
-							);
-
-						PEcore<3>(
-							a_col[3],
-							a_row[3],
-							a_val[3],
-							local_C_pe3_d0_d1,
-							local_C_pe3_d2_d3,
-							local_C_pe3_d4_d5,
-							local_C_pe3_d6_d7,
-							local_B_pe2_pe3_d0,
-							local_B_pe2_pe3_d1,
-							local_B_pe2_pe3_d2,
-							local_B_pe2_pe3_d3,
-							local_B_pe2_pe3_d4,
-							local_B_pe2_pe3_d5,
-							local_B_pe2_pe3_d6,
-							local_B_pe2_pe3_d7
-							);
-
-						PEcore<4>(
-							a_col[4],
-							a_row[4],
-							a_val[4],
-							local_C_pe4_d0_d1,
-							local_C_pe4_d2_d3,
-							local_C_pe4_d4_d5,
-							local_C_pe4_d6_d7,
-							local_B_pe4_pe5_d0,
-							local_B_pe4_pe5_d1,
-							local_B_pe4_pe5_d2,
-							local_B_pe4_pe5_d3,
-							local_B_pe4_pe5_d4,
-							local_B_pe4_pe5_d5,
-							local_B_pe4_pe5_d6,
-							local_B_pe4_pe5_d7
-							);
-
-						PEcore<5>(
-							a_col[5],
-							a_row[5],
-							a_val[5],
-							local_C_pe5_d0_d1,
-							local_C_pe5_d2_d3,
-							local_C_pe5_d4_d5,
-							local_C_pe5_d6_d7,
-							local_B_pe4_pe5_d0,
-							local_B_pe4_pe5_d1,
-							local_B_pe4_pe5_d2,
-							local_B_pe4_pe5_d3,
-							local_B_pe4_pe5_d4,
-							local_B_pe4_pe5_d5,
-							local_B_pe4_pe5_d6,
-							local_B_pe4_pe5_d7
-							);
-
-						PEcore<6>(
-							a_col[6],
-							a_row[6],
-							a_val[6],
-							local_C_pe6_d0_d1,
-							local_C_pe6_d2_d3,
-							local_C_pe6_d4_d5,
-							local_C_pe6_d6_d7,
-							local_B_pe6_pe7_d0,
-							local_B_pe6_pe7_d1,
-							local_B_pe6_pe7_d2,
-							local_B_pe6_pe7_d3,
-							local_B_pe6_pe7_d4,
-							local_B_pe6_pe7_d5,
-							local_B_pe6_pe7_d6,
-							local_B_pe6_pe7_d7
-							);
-
-						PEcore<7>(
-							a_col[7],
-							a_row[7],
-							a_val[7],
-							local_C_pe7_d0_d1,
-							local_C_pe7_d2_d3,
-							local_C_pe7_d4_d5,
-							local_C_pe7_d6_d7,
-							local_B_pe6_pe7_d0,
-							local_B_pe6_pe7_d1,
-							local_B_pe6_pe7_d2,
-							local_B_pe6_pe7_d3,
-							local_B_pe6_pe7_d4,
-							local_B_pe6_pe7_d5,
-							local_B_pe6_pe7_d6,
-							local_B_pe6_pe7_d7
-							);
+						for (int l = 0; l < NUM_CH_SPARSE; ++l) {
+							PEcore(
+								a_col[l],
+								a_row[l],
+								a_val[l],
+								local_C[l],
+								local_B[l/2]
+								);
+						}
 
 						++j;
 					}
@@ -1593,62 +564,17 @@ void PEG_last(
 			//write C fifo
 			write_C_outer: for (ap_uint<32> i = 0; i < (M + 15)/16; ++i) {
 #pragma HLS loop_tripcount min=1 max=1800
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 				ap_uint<64> u_64_pe_d[2][4];
 #pragma HLS array_partition variable=u_64_pe_d complete
 
 				ap_uint<32> u_32_d_pe[8][2];
 #pragma HLS array_partition variable=u_32_d_pe complete
 
-				switch (i % 4) {
-					case 0:
-						u_64_pe_d[0][0] = local_C_pe0_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe0_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe0_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe0_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe1_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe1_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe1_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe1_d6_d7[i/4];
-
-						break;
-					case 1:
-						u_64_pe_d[0][0] = local_C_pe2_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe2_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe2_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe2_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe3_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe3_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe3_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe3_d6_d7[i/4];
-
-						break;
-					case 2:
-						u_64_pe_d[0][0] = local_C_pe4_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe4_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe4_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe4_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe5_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe5_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe5_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe5_d6_d7[i/4];
-
-						break;
-					case 3:
-						u_64_pe_d[0][0] = local_C_pe6_d0_d1[i/4];
-						u_64_pe_d[0][1] = local_C_pe6_d2_d3[i/4];
-						u_64_pe_d[0][2] = local_C_pe6_d4_d5[i/4];
-						u_64_pe_d[0][3] = local_C_pe6_d6_d7[i/4];
-
-						u_64_pe_d[1][0] = local_C_pe7_d0_d1[i/4];
-						u_64_pe_d[1][1] = local_C_pe7_d2_d3[i/4];
-						u_64_pe_d[1][2] = local_C_pe7_d4_d5[i/4];
-						u_64_pe_d[1][3] = local_C_pe7_d6_d7[i/4];
-
-						break;
+				for (int pe = 0; pe < 2; ++pe) {
+					for (int d = 0; d < NUM_CH_B; ++d) {
+						u_64_pe_d[pe][d] = local_C[i % NUM_CH_B * 2 + pe][d][i / NUM_CH_B];
+					}
 				}
 
 				for (ap_uint<4> pe = 0; pe < 2; ++pe) {
@@ -1672,71 +598,17 @@ void PEG_last(
 	}
 }
 
-template <int id>
 void C_collect(
-    hls::stream<ap_uint<512> > & fifo_C_in0,
-    hls::stream<ap_uint<512> > & fifo_C_in1,
-    hls::stream<ap_uint<512> > & fifo_C_in2,
-    hls::stream<ap_uint<512> > & fifo_C_in3,
-    hls::stream<ap_uint<512> > & fifo_C_in4,
-    hls::stream<ap_uint<512> > & fifo_C_in5,
-    hls::stream<ap_uint<512> > & fifo_C_in6,
-    hls::stream<ap_uint<512> > & fifo_C_in7,
-
-    hls::stream<ap_uint<512> > & fifo_C_out0,
-    hls::stream<ap_uint<512> > & fifo_C_out1,
-    hls::stream<ap_uint<512> > & fifo_C_out2,
-    hls::stream<ap_uint<512> > & fifo_C_out3,
-    hls::stream<ap_uint<512> > & fifo_C_out4,
-    hls::stream<ap_uint<512> > & fifo_C_out5,
-    hls::stream<ap_uint<512> > & fifo_C_out6,
-    hls::stream<ap_uint<512> > & fifo_C_out7
+    tapa::istreams<ap_uint<512>, NUM_CH_SPARSE> & fifo_C_in,
+    tapa::ostreams<ap_uint<512>, NUM_CH_C> & fifo_C_out
     ) {
-    ap_uint<512> tmp_c0;
-    ap_uint<512> tmp_c1;
-    ap_uint<512> tmp_c2;
-    ap_uint<512> tmp_c3;
-    ap_uint<512> tmp_c4;
-    ap_uint<512> tmp_c5;
-    ap_uint<512> tmp_c6;
-    ap_uint<512> tmp_c7;
-
-    bool c0_ready = false;
-    bool c1_ready = false;
-    bool c2_ready = false;
-    bool c3_ready = false;
-    bool c4_ready = false;
-    bool c5_ready = false;
-    bool c6_ready = false;
-    bool c7_ready = false;
-
-    ap_uint<512> MN512;
-    bool M512_ready = false;
-    w_Mxx: while(!M512_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-        M512_ready = fifo_C_in7.read_nb(MN512);
-    };
+    const auto MN512 = fifo_C_in[NUM_CH_SPARSE-1].read();
     ap_uint<32> M = MN512(31, 0);
     ap_uint<32> P_N = MN512(63, 32);
 
-    ap_uint<512> out_c0;
-    ap_uint<512> out_c1;
-    ap_uint<512> out_c2;
-    ap_uint<512> out_c3;
-    ap_uint<512> out_c4;
-    ap_uint<512> out_c5;
-    ap_uint<512> out_c6;
-    ap_uint<512> out_c7;
-
-    fifo_C_out0.write(HLS_REG(MN512));
-    fifo_C_out1.write(HLS_REG(MN512));
-    fifo_C_out2.write(HLS_REG(MN512));
-    fifo_C_out3.write(HLS_REG(MN512));
-    fifo_C_out4.write(HLS_REG(MN512));
-    fifo_C_out5.write(HLS_REG(MN512));
-    fifo_C_out6.write(HLS_REG(MN512));
-    fifo_C_out7.write(HLS_REG(MN512));
+    for (int i = 0; i < NUM_CH_SPARSE; ++i) {
+      fifo_C_out[i].write(tapa::reg(MN512));
+    }
 
     const ap_uint<16> N16 = P_N(31, 16);
     const ap_uint<16> rp_time = (N16 == 0)? ((ap_uint<16>) 1) : N16;
@@ -1748,152 +620,34 @@ void C_collect(
 #pragma HLS loop_tripcount min=1 max=16
         cvt_b: for(ap_uint<32> i = 0; i < num_ite; ) {
 #pragma HLS loop_tripcount min=1 max=800
-#pragma HLS pipeline
-            if (!c0_ready) {
-                c0_ready = fifo_C_in0.read_nb(tmp_c0);
+#pragma HLS pipeline II=1
+            bool all_c_ready = true;
+            for (int j = 0; j < NUM_CH_SPARSE; ++j) {
+              all_c_ready &= !fifo_C_in[j].empty();
             }
-            if (!c1_ready) {
-                c1_ready = fifo_C_in1.read_nb(tmp_c1);
-            }
-            if (!c2_ready) {
-                c2_ready = fifo_C_in2.read_nb(tmp_c2);
-            }
-            if (!c3_ready) {
-                c3_ready = fifo_C_in3.read_nb(tmp_c3);
-            }
-            if (!c4_ready) {
-                c4_ready = fifo_C_in4.read_nb(tmp_c4);
-            }
-            if (!c5_ready) {
-                c5_ready = fifo_C_in5.read_nb(tmp_c5);
-            }
-            if (!c6_ready) {
-                c6_ready = fifo_C_in6.read_nb(tmp_c6);
-            }
-            if (!c7_ready) {
-                c7_ready = fifo_C_in7.read_nb(tmp_c7);
-            }
-
-            bool all_c_ready = c0_ready && c1_ready && c2_ready && c3_ready && c4_ready && c5_ready && c6_ready && c7_ready;
-
             if (all_c_ready) {
-                ap_uint<512> tmp_c0_delay = HLS_REG(tmp_c0);
-                ap_uint<512> tmp_c1_delay = HLS_REG(tmp_c1);
-                ap_uint<512> tmp_c2_delay = HLS_REG(tmp_c2);
-                ap_uint<512> tmp_c3_delay = HLS_REG(tmp_c3);
-                ap_uint<512> tmp_c4_delay = HLS_REG(tmp_c4);
-                ap_uint<512> tmp_c5_delay = HLS_REG(tmp_c5);
-                ap_uint<512> tmp_c6_delay = HLS_REG(tmp_c6);
-                ap_uint<512> tmp_c7_delay = HLS_REG(tmp_c7);
-
-                out_c0( 63,   0) = tmp_c0_delay(  63,    0);
-                out_c0(127,  64) = tmp_c1_delay(  63,    0);
-                out_c0(191, 128) = tmp_c2_delay(  63,    0);
-                out_c0(255, 192) = tmp_c3_delay(  63,    0);
-                out_c0(319, 256) = tmp_c4_delay(  63,    0);
-                out_c0(383, 320) = tmp_c5_delay(  63,    0);
-                out_c0(447, 384) = tmp_c6_delay(  63,    0);
-                out_c0(511, 448) = tmp_c7_delay(  63,    0);
-
-                out_c1( 63,   0) = tmp_c0_delay( 127,   64);
-                out_c1(127,  64) = tmp_c1_delay( 127,   64);
-                out_c1(191, 128) = tmp_c2_delay( 127,   64);
-                out_c1(255, 192) = tmp_c3_delay( 127,   64);
-                out_c1(319, 256) = tmp_c4_delay( 127,   64);
-                out_c1(383, 320) = tmp_c5_delay( 127,   64);
-                out_c1(447, 384) = tmp_c6_delay( 127,   64);
-                out_c1(511, 448) = tmp_c7_delay( 127,   64);
-
-                out_c2( 63,   0) = tmp_c0_delay( 191,  128);
-                out_c2(127,  64) = tmp_c1_delay( 191,  128);
-                out_c2(191, 128) = tmp_c2_delay( 191,  128);
-                out_c2(255, 192) = tmp_c3_delay( 191,  128);
-                out_c2(319, 256) = tmp_c4_delay( 191,  128);
-                out_c2(383, 320) = tmp_c5_delay( 191,  128);
-                out_c2(447, 384) = tmp_c6_delay( 191,  128);
-                out_c2(511, 448) = tmp_c7_delay( 191,  128);
-
-                out_c3( 63,   0) = tmp_c0_delay( 255,  192);
-                out_c3(127,  64) = tmp_c1_delay( 255,  192);
-                out_c3(191, 128) = tmp_c2_delay( 255,  192);
-                out_c3(255, 192) = tmp_c3_delay( 255,  192);
-                out_c3(319, 256) = tmp_c4_delay( 255,  192);
-                out_c3(383, 320) = tmp_c5_delay( 255,  192);
-                out_c3(447, 384) = tmp_c6_delay( 255,  192);
-                out_c3(511, 448) = tmp_c7_delay( 255,  192);
-
-                out_c4( 63,   0) = tmp_c0_delay( 319,  256);
-                out_c4(127,  64) = tmp_c1_delay( 319,  256);
-                out_c4(191, 128) = tmp_c2_delay( 319,  256);
-                out_c4(255, 192) = tmp_c3_delay( 319,  256);
-                out_c4(319, 256) = tmp_c4_delay( 319,  256);
-                out_c4(383, 320) = tmp_c5_delay( 319,  256);
-                out_c4(447, 384) = tmp_c6_delay( 319,  256);
-                out_c4(511, 448) = tmp_c7_delay( 319,  256);
-
-                out_c5( 63,   0) = tmp_c0_delay( 383,  320);
-                out_c5(127,  64) = tmp_c1_delay( 383,  320);
-                out_c5(191, 128) = tmp_c2_delay( 383,  320);
-                out_c5(255, 192) = tmp_c3_delay( 383,  320);
-                out_c5(319, 256) = tmp_c4_delay( 383,  320);
-                out_c5(383, 320) = tmp_c5_delay( 383,  320);
-                out_c5(447, 384) = tmp_c6_delay( 383,  320);
-                out_c5(511, 448) = tmp_c7_delay( 383,  320);
-
-                out_c6( 63,   0) = tmp_c0_delay( 447,  384);
-                out_c6(127,  64) = tmp_c1_delay( 447,  384);
-                out_c6(191, 128) = tmp_c2_delay( 447,  384);
-                out_c6(255, 192) = tmp_c3_delay( 447,  384);
-                out_c6(319, 256) = tmp_c4_delay( 447,  384);
-                out_c6(383, 320) = tmp_c5_delay( 447,  384);
-                out_c6(447, 384) = tmp_c6_delay( 447,  384);
-                out_c6(511, 448) = tmp_c7_delay( 447,  384);
-
-                out_c7( 63,   0) = tmp_c0_delay( 511,  448);
-                out_c7(127,  64) = tmp_c1_delay( 511,  448);
-                out_c7(191, 128) = tmp_c2_delay( 511,  448);
-                out_c7(255, 192) = tmp_c3_delay( 511,  448);
-                out_c7(319, 256) = tmp_c4_delay( 511,  448);
-                out_c7(383, 320) = tmp_c5_delay( 511,  448);
-                out_c7(447, 384) = tmp_c6_delay( 511,  448);
-                out_c7(511, 448) = tmp_c7_delay( 511,  448);
-
-                fifo_C_out0.write(out_c0);
-                fifo_C_out1.write(out_c1);
-                fifo_C_out2.write(out_c2);
-                fifo_C_out3.write(out_c3);
-                fifo_C_out4.write(out_c4);
-                fifo_C_out5.write(out_c5);
-                fifo_C_out6.write(out_c6);
-                fifo_C_out7.write(out_c7);
-
-                c0_ready = false;
-                c1_ready = false;
-                c2_ready = false;
-                c3_ready = false;
-                c4_ready = false;
-                c5_ready = false;
-                c6_ready = false;
-                c7_ready = false;
+                ap_uint<512> out_c[NUM_CH_C];
+#pragma HLS array_partition variable=out_c complete
+                for (int j = 0; j < NUM_CH_SPARSE; ++j) {
+                  ap_uint<512> tmp_c_delay = tapa::reg(fifo_C_in[j].read(nullptr));
+                  for (int k = 0; k < NUM_CH_C; ++k) {
+                    out_c[k](64*j+63, 64*j) = tmp_c_delay(64*k+63, 64*k);
+                  }
+                }
+                for (int j = 0; j < NUM_CH_C; ++j) {
+                  fifo_C_out[j].write(out_c[j]);
+                }
                 ++i;
             }
         }
     }
 }
 
-
-template <int ch>
 void write_C(
-	hls::stream<ap_uint<512> > & fifo_C,
-	ap_uint<512>* C_out
+	tapa::istream<ap_uint<512>> & fifo_C,
+	tapa::async_mmap<ap_uint<512>> C_out
 	) {
-	ap_uint<512> M_u512;
-	bool M_ready = false;
-	w_M: while(!M_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-		M_ready = fifo_C.read_nb(M_u512);
-	};
+	const auto M_u512 = fifo_C.read();
 	ap_uint<32> M = M_u512(31, 0);
 	ap_uint<32> P_N = M_u512(63, 32);
 
@@ -1905,19 +659,28 @@ void write_C(
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
 #pragma HLS loop_tripcount min=1 max=16
-		wr_C: for(ap_uint<32> i = 0; i < num_ite_C; i++) {
+		wr_C: for(ap_uint<32> i_req = 0, i_resp = 0; i_resp < num_ite_C;) {
 #pragma HLS loop_tripcount min=1 max=500000
-#pragma HLS pipeline
-			ap_uint<512> tmp_c = fifo_C.read();
-			C_out[i] = tmp_c;
+#pragma HLS pipeline II=1
+			if (i_req < num_ite_C &&
+					i_req < i_resp + 64 &&
+					!fifo_C.empty() &&
+					!C_out.write_addr.full() &&
+					!C_out.write_data.full() ) {
+				C_out.write_addr.try_write(i_req);
+				C_out.write_data.try_write(fifo_C.read(nullptr));
+				++i_req;
+			}
+			if (!C_out.write_resp.empty()) {
+				i_resp += ap_uint<9>(C_out.write_resp.read(nullptr)) + 1;
+			}
 		}
 	}
 }
 
-template <int ch>
 void read_C(
-	ap_uint<512>* C,
-	hls::stream<ap_uint<512> > & fifo_C,
+	tapa::async_mmap<ap_uint<512>> C,
+	tapa::ostream<ap_uint<512>> & fifo_C,
 	const ap_uint<32> M,
 	const ap_uint<32> P_N
 	) {
@@ -1929,34 +692,34 @@ void read_C(
 	l_rp: for(ap_uint<16> rp = 0; rp < rp_time; rp++) {
 #pragma HLS loop_flatten off
 #pragma HLS loop_tripcount min=1 max=16
-		rd_C: for(ap_uint<32> i = 0; i < num_ite_C; i++) {
+		rd_C: for(ap_uint<32> i_req = 0, i_resp = 0; i_resp < num_ite_C;) {
 #pragma HLS loop_tripcount min=1 max=500000
-#pragma HLS pipeline
-			ap_uint<512> tmp_c = C[i];
-			fifo_C.write(tmp_c);
+#pragma HLS pipeline II=1
+			if (i_req < num_ite_C &&
+					i_req < i_resp + 64 &&
+					C.read_addr.try_write(i_req)) {
+				++i_req;
+			}
+			if (!fifo_C.full() && !C.read_data.empty()) {
+				fifo_C.try_write(C.read_data.read(nullptr));
+				++i_resp;
+			}
 		}
 	}
 }
 
-template <int ch>
 void comp_C(
-	hls::stream<ap_uint<512> > & fifo_C_read_in,
-	hls::stream<ap_uint<512> > & fifo_C_pe_in,
-	hls::stream<ap_uint<512> > & fifo_C_out
+	tapa::istream<ap_uint<512>> & fifo_C_read_in,
+	tapa::istream<ap_uint<512>> & fifo_C_pe_in,
+	tapa::ostream<ap_uint<512>> & fifo_C_out
 	) {
-	bool M_ready = false;
-	ap_uint<512> M512;
-	w_Mxx: while(!M_ready) {
-#pragma HLS loop_tripcount min=1 max=10
-#pragma HLS pipeline
-		M_ready = fifo_C_pe_in.read_nb(M512);
-	};
+	const auto M512 = fifo_C_pe_in.read();
 	fifo_C_out.write(M512);
 	ap_uint<32> M = M512(31, 0);
 	ap_uint<32> P_N = M512(63, 32);
 	ap_uint<32> beta_u = M512(95, 64);
 
-	float beta_f  = uint32_to_float(beta_u);
+	float beta_f = tapa::bit_cast<float>(beta_u);
 
 	ap_uint<512> c_out;
 	ap_uint<512> c_read;
@@ -1976,26 +739,26 @@ void comp_C(
 
 		cc: for (ap_uint<32> i = 0; i < num_ite_C; ) {
 #pragma HLS loop_tripcount min=1 max=5000
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
 			if (!c_read_ready) {
-				c_read_ready = fifo_C_read_in.read_nb(c_read);
+				c_read_ready = fifo_C_read_in.try_read(c_read);
 			}
 			if (!c_pe_ready) {
-				c_pe_ready = fifo_C_pe_in.read_nb(c_pe);
+				c_pe_ready = fifo_C_pe_in.try_read(c_pe);
 			}
 
 			if (c_read_ready && c_pe_ready) {
-				ap_uint<512> c_pe_delay = HLS_REG(c_pe);
-				ap_uint<512> c_read_delay = HLS_REG(c_read);
+				ap_uint<512> c_pe_delay = tapa::reg(c_pe);
+				ap_uint<512> c_read_delay = tapa::reg(c_read);
 
 				for(ap_uint<5> p = 0; p < 16; ++p) {
-					float op_ab = uint32_to_float(c_pe_delay(31 + p * 32, p * 32));
-					float op_c  = uint32_to_float(c_read_delay(31 + p * 32, p * 32));
-					float op_result = op_ab + HLS_REG(beta_f) * op_c;
-					c_out(31 + p * 32, p * 32) = float_to_uint32(op_result);
+					float op_ab = tapa::bit_cast<float>(c_pe_delay(31 + p * 32, p * 32).to_uint());
+					float op_c  = tapa::bit_cast<float>(c_read_delay(31 + p * 32, p * 32).to_uint());
+					float op_result = op_ab + tapa::reg(beta_f) * op_c;
+					c_out(31 + p * 32, p * 32) = tapa::bit_cast<ap_uint<32>>(op_result);
 				}
 
-				ap_uint<512> c_out_reg = HLS_REG(c_out);
+				ap_uint<512> c_out_reg = tapa::reg(c_out);
 				fifo_C_out.write(c_out_reg);
 				c_read_ready = false;
 				c_pe_ready = false;
@@ -2005,45 +768,18 @@ void comp_C(
 	}
 }
 
-
-#ifndef HLS
-extern "C" {
-#endif
+constexpr int FIFO_DEPTH = 8;
 
 void sextans(
-	const ap_uint<32> *edge_list_ptr,
+	tapa::mmap<ap_uint<32>> edge_list_ptr,
 
-	const ap_uint<512> *edge_list_ch0,
-	const ap_uint<512> *edge_list_ch1,
-	const ap_uint<512> *edge_list_ch2,
-	const ap_uint<512> *edge_list_ch3,
-	const ap_uint<512> *edge_list_ch4,
-	const ap_uint<512> *edge_list_ch5,
-	const ap_uint<512> *edge_list_ch6,
-	const ap_uint<512> *edge_list_ch7,
+	tapa::mmaps<ap_uint<512>, NUM_CH_SPARSE> edge_list_ch,
 
-	const ap_uint<512>  *mat_B_ch0,
-	const ap_uint<512>  *mat_B_ch1,
-	const ap_uint<512>  *mat_B_ch2,
-	const ap_uint<512>  *mat_B_ch3,
+	tapa::mmaps<ap_uint<512>, NUM_CH_B> mat_B_ch,
 
-	ap_uint<512>  *mat_C_ch0_in,
-	ap_uint<512>  *mat_C_ch1_in,
-	ap_uint<512>  *mat_C_ch2_in,
-	ap_uint<512>  *mat_C_ch3_in,
-	ap_uint<512>  *mat_C_ch4_in,
-	ap_uint<512>  *mat_C_ch5_in,
-	ap_uint<512>  *mat_C_ch6_in,
-	ap_uint<512>  *mat_C_ch7_in,
+	tapa::mmaps<ap_uint<512>, NUM_CH_C> mat_C_ch_in,
 
-	ap_uint<512>  *mat_C_ch0,
-	ap_uint<512>  *mat_C_ch1,
-	ap_uint<512>  *mat_C_ch2,
-	ap_uint<512>  *mat_C_ch3,
-	ap_uint<512>  *mat_C_ch4,
-	ap_uint<512>  *mat_C_ch5,
-	ap_uint<512>  *mat_C_ch6,
-	ap_uint<512>  *mat_C_ch7,
+	tapa::mmaps<ap_uint<512>, NUM_CH_C> mat_C_ch,
 
 	const int NUM_ITE,
 	const int NUM_A_LEN,
@@ -2053,360 +789,22 @@ void sextans(
 	const unsigned int alpha_u,
 	const unsigned int beta_u
 ) {
-#pragma HLS INTERFACE m_axi port = edge_list_ptr offset = slave bundle = hbm0
+	tapa::streams<ap_uint<32>, NUM_CH_SPARSE, FIFO_DEPTH> fifo_edge_list_ptr_pe("fifo_edge_list_ptr_pe");
 
-#pragma HLS INTERFACE m_axi port = edge_list_ch0 offset = slave bundle = hbm1
-#pragma HLS INTERFACE m_axi port = edge_list_ch1 offset = slave bundle = hbm2
-#pragma HLS INTERFACE m_axi port = edge_list_ch2 offset = slave bundle = hbm3
-#pragma HLS INTERFACE m_axi port = edge_list_ch3 offset = slave bundle = hbm4
-#pragma HLS INTERFACE m_axi port = edge_list_ch4 offset = slave bundle = hbm5
-#pragma HLS INTERFACE m_axi port = edge_list_ch5 offset = slave bundle = hbm6
-#pragma HLS INTERFACE m_axi port = edge_list_ch6 offset = slave bundle = hbm7
-#pragma HLS INTERFACE m_axi port = edge_list_ch7 offset = slave bundle = hbm8
+	tapa::streams<ap_uint<512>, NUM_CH_SPARSE, FIFO_DEPTH> fifo_A_pe("fifo_A_pe");
 
-#pragma HLS INTERFACE m_axi port = mat_B_ch0 offset = slave bundle = hbm9
-#pragma HLS INTERFACE m_axi port = mat_B_ch1 offset = slave bundle = hbm10
-#pragma HLS INTERFACE m_axi port = mat_B_ch2 offset = slave bundle = hbm11
-#pragma HLS INTERFACE m_axi port = mat_B_ch3 offset = slave bundle = hbm12
+	tapa::streams<ap_uint<512>, NUM_CH_SPARSE * NUM_CH_B, FIFO_DEPTH> fifo_B_pe_x("fifo_B_pe_x");
 
-#pragma HLS INTERFACE m_axi port = mat_C_ch0 offset = slave bundle = hbm16
-#pragma HLS INTERFACE m_axi port = mat_C_ch1 offset = slave bundle = hbm17
-#pragma HLS INTERFACE m_axi port = mat_C_ch2 offset = slave bundle = hbm18
-#pragma HLS INTERFACE m_axi port = mat_C_ch3 offset = slave bundle = hbm19
-#pragma HLS INTERFACE m_axi port = mat_C_ch4 offset = slave bundle = hbm20
-#pragma HLS INTERFACE m_axi port = mat_C_ch5 offset = slave bundle = hbm21
-#pragma HLS INTERFACE m_axi port = mat_C_ch6 offset = slave bundle = hbm22
-#pragma HLS INTERFACE m_axi port = mat_C_ch7 offset = slave bundle = hbm23
+	tapa::streams<ap_uint<512>, NUM_CH_SPARSE, FIFO_DEPTH> fifo_C_pe("fifo_C_pe");
 
-#pragma HLS INTERFACE m_axi port = mat_C_ch0_in offset = slave bundle = hbm24
-#pragma HLS INTERFACE m_axi port = mat_C_ch1_in offset = slave bundle = hbm25
-#pragma HLS INTERFACE m_axi port = mat_C_ch2_in offset = slave bundle = hbm26
-#pragma HLS INTERFACE m_axi port = mat_C_ch3_in offset = slave bundle = hbm27
-#pragma HLS INTERFACE m_axi port = mat_C_ch4_in offset = slave bundle = hbm28
-#pragma HLS INTERFACE m_axi port = mat_C_ch5_in offset = slave bundle = hbm29
-#pragma HLS INTERFACE m_axi port = mat_C_ch6_in offset = slave bundle = hbm30
-#pragma HLS INTERFACE m_axi port = mat_C_ch7_in offset = slave bundle = hbm31
+	tapa::streams<ap_uint<512>, NUM_CH_C, FIFO_DEPTH> fifo_C_read_in("fifo_C_read_in");
 
-#pragma HLS INTERFACE s_axilite port = NUM_ITE bundle = control
-#pragma HLS INTERFACE s_axilite port = NUM_A_LEN bundle = control
-#pragma HLS INTERFACE s_axilite port = M bundle = control
-#pragma HLS INTERFACE s_axilite port = K bundle = control
-#pragma HLS INTERFACE s_axilite port = P_N bundle = control
-#pragma HLS INTERFACE s_axilite port = alpha_u bundle = control
-#pragma HLS INTERFACE s_axilite port = beta_u bundle = control
+	tapa::streams<ap_uint<512>, NUM_CH_C, FIFO_DEPTH> fifo_C_ch_result("fifo_C_ch_result");
 
-#pragma HLS INTERFACE s_axilite port = return bundle = control
+	tapa::streams<ap_uint<512>, NUM_CH_C, FIFO_DEPTH> fifo_C_ch("fifo_C_ch");
 
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe0("fifo_edge_list_ptr_pe0");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe1("fifo_edge_list_ptr_pe1");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe2("fifo_edge_list_ptr_pe2");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe3("fifo_edge_list_ptr_pe3");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe4("fifo_edge_list_ptr_pe4");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe5("fifo_edge_list_ptr_pe5");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe6("fifo_edge_list_ptr_pe6");
-	hls::stream<ap_uint<32> > fifo_edge_list_ptr_pe7("fifo_edge_list_ptr_pe7");
-
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe0 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe1 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe2 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe3 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe4 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe5 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe6 depth=8
-#pragma HLS STREAM variable=fifo_edge_list_ptr_pe7 depth=8
-
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_edge_list_ptr_pe7 core=FIFO_SRL
-
-	hls::stream<ap_uint<512> > fifo_A_pe0("fifo_A_pe0");
-	hls::stream<ap_uint<512> > fifo_A_pe1("fifo_A_pe1");
-	hls::stream<ap_uint<512> > fifo_A_pe2("fifo_A_pe2");
-	hls::stream<ap_uint<512> > fifo_A_pe3("fifo_A_pe3");
-	hls::stream<ap_uint<512> > fifo_A_pe4("fifo_A_pe4");
-	hls::stream<ap_uint<512> > fifo_A_pe5("fifo_A_pe5");
-	hls::stream<ap_uint<512> > fifo_A_pe6("fifo_A_pe6");
-	hls::stream<ap_uint<512> > fifo_A_pe7("fifo_A_pe7");
-
-#pragma HLS STREAM variable=fifo_A_pe0 depth=8
-#pragma HLS STREAM variable=fifo_A_pe1 depth=8
-#pragma HLS STREAM variable=fifo_A_pe2 depth=8
-#pragma HLS STREAM variable=fifo_A_pe3 depth=8
-#pragma HLS STREAM variable=fifo_A_pe4 depth=8
-#pragma HLS STREAM variable=fifo_A_pe5 depth=8
-#pragma HLS STREAM variable=fifo_A_pe6 depth=8
-#pragma HLS STREAM variable=fifo_A_pe7 depth=8
-
-#pragma HLS RESOURCE variable=fifo_A_pe0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_A_pe7 core=FIFO_SRL
-
-	hls::stream<ap_uint<512> > fifo_B_pe0_x0("fifo_B_pe0_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe0_x1("fifo_B_pe0_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe0_x2("fifo_B_pe0_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe0_x3("fifo_B_pe0_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe1_x0("fifo_B_pe1_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe1_x1("fifo_B_pe1_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe1_x2("fifo_B_pe1_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe1_x3("fifo_B_pe1_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe2_x0("fifo_B_pe2_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe2_x1("fifo_B_pe2_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe2_x2("fifo_B_pe2_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe2_x3("fifo_B_pe2_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe3_x0("fifo_B_pe3_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe3_x1("fifo_B_pe3_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe3_x2("fifo_B_pe3_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe3_x3("fifo_B_pe3_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe4_x0("fifo_B_pe4_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe4_x1("fifo_B_pe4_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe4_x2("fifo_B_pe4_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe4_x3("fifo_B_pe4_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe5_x0("fifo_B_pe5_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe5_x1("fifo_B_pe5_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe5_x2("fifo_B_pe5_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe5_x3("fifo_B_pe5_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe6_x0("fifo_B_pe6_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe6_x1("fifo_B_pe6_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe6_x2("fifo_B_pe6_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe6_x3("fifo_B_pe6_x3");
-	hls::stream<ap_uint<512> > fifo_B_pe7_x0("fifo_B_pe7_x0");
-	hls::stream<ap_uint<512> > fifo_B_pe7_x1("fifo_B_pe7_x1");
-	hls::stream<ap_uint<512> > fifo_B_pe7_x2("fifo_B_pe7_x2");
-	hls::stream<ap_uint<512> > fifo_B_pe7_x3("fifo_B_pe7_x3");
-
-#pragma HLS STREAM variable=fifo_B_pe0_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe0_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe0_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe0_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe1_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe1_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe1_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe1_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe2_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe2_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe2_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe2_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe3_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe3_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe3_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe3_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe4_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe4_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe4_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe4_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe5_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe5_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe5_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe5_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe6_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe6_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe6_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe6_x3 depth=8
-#pragma HLS STREAM variable=fifo_B_pe7_x0 depth=8
-#pragma HLS STREAM variable=fifo_B_pe7_x1 depth=8
-#pragma HLS STREAM variable=fifo_B_pe7_x2 depth=8
-#pragma HLS STREAM variable=fifo_B_pe7_x3 depth=8
-
-#pragma HLS RESOURCE variable=fifo_B_pe0_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe0_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe0_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe0_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe1_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe1_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe1_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe1_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe2_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe2_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe2_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe2_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe3_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe3_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe3_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe3_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe4_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe4_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe4_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe4_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe5_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe5_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe5_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe5_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe6_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe6_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe6_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe6_x3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe7_x0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe7_x1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe7_x2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_B_pe7_x3 core=FIFO_SRL
-
-	hls::stream<ap_uint<512> > fifo_C_pe0("fifo_C_pe0");
-	hls::stream<ap_uint<512> > fifo_C_pe1("fifo_C_pe1");
-	hls::stream<ap_uint<512> > fifo_C_pe2("fifo_C_pe2");
-	hls::stream<ap_uint<512> > fifo_C_pe3("fifo_C_pe3");
-	hls::stream<ap_uint<512> > fifo_C_pe4("fifo_C_pe4");
-	hls::stream<ap_uint<512> > fifo_C_pe5("fifo_C_pe5");
-	hls::stream<ap_uint<512> > fifo_C_pe6("fifo_C_pe6");
-	hls::stream<ap_uint<512> > fifo_C_pe7("fifo_C_pe7");
-
-#pragma HLS STREAM variable=fifo_C_pe0 depth=8
-#pragma HLS STREAM variable=fifo_C_pe1 depth=8
-#pragma HLS STREAM variable=fifo_C_pe2 depth=8
-#pragma HLS STREAM variable=fifo_C_pe3 depth=8
-#pragma HLS STREAM variable=fifo_C_pe4 depth=8
-#pragma HLS STREAM variable=fifo_C_pe5 depth=8
-#pragma HLS STREAM variable=fifo_C_pe6 depth=8
-#pragma HLS STREAM variable=fifo_C_pe7 depth=8
-
-#pragma HLS RESOURCE variable=fifo_C_pe0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_pe7 core=FIFO_SRL
-
-	hls::stream<ap_uint<512> > fifo_C_read_in0("fifo_C_read_in0");
-	hls::stream<ap_uint<512> > fifo_C_read_in1("fifo_C_read_in1");
-	hls::stream<ap_uint<512> > fifo_C_read_in2("fifo_C_read_in2");
-	hls::stream<ap_uint<512> > fifo_C_read_in3("fifo_C_read_in3");
-	hls::stream<ap_uint<512> > fifo_C_read_in4("fifo_C_read_in4");
-	hls::stream<ap_uint<512> > fifo_C_read_in5("fifo_C_read_in5");
-	hls::stream<ap_uint<512> > fifo_C_read_in6("fifo_C_read_in6");
-	hls::stream<ap_uint<512> > fifo_C_read_in7("fifo_C_read_in7");
-
-#pragma HLS STREAM variable=fifo_C_read_in0 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in1 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in2 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in3 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in4 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in5 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in6 depth=8
-#pragma HLS STREAM variable=fifo_C_read_in7 depth=8
-
-#pragma HLS RESOURCE variable=fifo_C_read_in0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_read_in7 core=FIFO_SRL
-
-	hls::stream<ap_uint<512> > fifo_C_ch0_result("fifo_C_ch0_result");
-	hls::stream<ap_uint<512> > fifo_C_ch1_result("fifo_C_ch1_result");
-	hls::stream<ap_uint<512> > fifo_C_ch2_result("fifo_C_ch2_result");
-	hls::stream<ap_uint<512> > fifo_C_ch3_result("fifo_C_ch3_result");
-	hls::stream<ap_uint<512> > fifo_C_ch4_result("fifo_C_ch4_result");
-	hls::stream<ap_uint<512> > fifo_C_ch5_result("fifo_C_ch5_result");
-	hls::stream<ap_uint<512> > fifo_C_ch6_result("fifo_C_ch6_result");
-	hls::stream<ap_uint<512> > fifo_C_ch7_result("fifo_C_ch7_result");
-
-#pragma HLS STREAM variable=fifo_C_ch0_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch1_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch2_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch3_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch4_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch5_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch6_result depth=8
-#pragma HLS STREAM variable=fifo_C_ch7_result depth=8
-
-#pragma HLS RESOURCE variable=fifo_C_ch0_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch1_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch2_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch3_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch4_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch5_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch6_result core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch7_result core=FIFO_SRL
-
-	hls::stream<ap_uint<512> > fifo_C_ch0("fifo_C_ch0");
-	hls::stream<ap_uint<512> > fifo_C_ch1("fifo_C_ch1");
-	hls::stream<ap_uint<512> > fifo_C_ch2("fifo_C_ch2");
-	hls::stream<ap_uint<512> > fifo_C_ch3("fifo_C_ch3");
-	hls::stream<ap_uint<512> > fifo_C_ch4("fifo_C_ch4");
-	hls::stream<ap_uint<512> > fifo_C_ch5("fifo_C_ch5");
-	hls::stream<ap_uint<512> > fifo_C_ch6("fifo_C_ch6");
-	hls::stream<ap_uint<512> > fifo_C_ch7("fifo_C_ch7");
-
-#pragma HLS STREAM variable=fifo_C_ch0 depth=8
-#pragma HLS STREAM variable=fifo_C_ch1 depth=8
-#pragma HLS STREAM variable=fifo_C_ch2 depth=8
-#pragma HLS STREAM variable=fifo_C_ch3 depth=8
-#pragma HLS STREAM variable=fifo_C_ch4 depth=8
-#pragma HLS STREAM variable=fifo_C_ch5 depth=8
-#pragma HLS STREAM variable=fifo_C_ch6 depth=8
-#pragma HLS STREAM variable=fifo_C_ch7 depth=8
-
-#pragma HLS RESOURCE variable=fifo_C_ch0 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch1 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch2 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch3 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch4 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch5 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch6 core=FIFO_SRL
-#pragma HLS RESOURCE variable=fifo_C_ch7 core=FIFO_SRL
-
-#pragma HLS dataflow
-
-	ap_uint<32> A_LEN0 = HLS_REG(NUM_A_LEN);
-	ap_uint<32> A_LEN1 = HLS_REG(A_LEN0);
-	ap_uint<32> A_LEN2 = HLS_REG(A_LEN1);
-	ap_uint<32> A_LEN3 = HLS_REG(A_LEN2);
-	ap_uint<32> A_LEN4 = HLS_REG(A_LEN3);
-	ap_uint<32> A_LEN5 = HLS_REG(A_LEN4);
-	ap_uint<32> A_LEN6 = HLS_REG(A_LEN5);
-	ap_uint<32> A_LEN7 = HLS_REG(A_LEN6);
-
-	ap_uint<32> N_rdA0 = HLS_REG(P_N);
-	ap_uint<32> N_rdA1 = HLS_REG(N_rdA0);
-	ap_uint<32> N_rdA2 = HLS_REG(N_rdA1);
-	ap_uint<32> N_rdA3 = HLS_REG(N_rdA2);
-	ap_uint<32> N_rdA4 = HLS_REG(N_rdA3);
-	ap_uint<32> N_rdA5 = HLS_REG(N_rdA4);
-	ap_uint<32> N_rdA6 = HLS_REG(N_rdA5);
-	ap_uint<32> N_rdA7 = HLS_REG(N_rdA6);
-
-	ap_uint<32> N_rdB0 = HLS_REG(P_N);
-	ap_uint<32> N_rdB1 = HLS_REG(N_rdB0);
-	ap_uint<32> N_rdB2 = HLS_REG(N_rdB1);
-	ap_uint<32> N_rdB3 = HLS_REG(N_rdB2);
-
-	ap_uint<32> N_rdC0 = HLS_REG(P_N);
-	ap_uint<32> N_rdC1 = HLS_REG(N_rdC0);
-	ap_uint<32> N_rdC2 = HLS_REG(N_rdC1);
-	ap_uint<32> N_rdC3 = HLS_REG(N_rdC2);
-	ap_uint<32> N_rdC4 = HLS_REG(N_rdC3);
-	ap_uint<32> N_rdC5 = HLS_REG(N_rdC4);
-	ap_uint<32> N_rdC6 = HLS_REG(N_rdC5);
-	ap_uint<32> N_rdC7 = HLS_REG(N_rdC6);
-
-	ap_uint<32> M_rdC0 = HLS_REG(M);
-	ap_uint<32> M_rdC1 = HLS_REG(M_rdC0);
-	ap_uint<32> M_rdC2 = HLS_REG(M_rdC1);
-	ap_uint<32> M_rdC3 = HLS_REG(M_rdC2);
-	ap_uint<32> M_rdC4 = HLS_REG(M_rdC3);
-	ap_uint<32> M_rdC5 = HLS_REG(M_rdC4);
-	ap_uint<32> M_rdC6 = HLS_REG(M_rdC5);
-	ap_uint<32> M_rdC7 = HLS_REG(M_rdC6);
-
-	ap_uint<32> K0 = HLS_REG(K);
-	ap_uint<32> K1 = HLS_REG(K0);
-	ap_uint<32> K2 = HLS_REG(K1);
-	ap_uint<32> K3 = HLS_REG(K2);
-
-	read_edge_list_ptr(
+	tapa::task()
+	.invoke(read_edge_list_ptr,
 		NUM_ITE,
 		M,
 		P_N,
@@ -2414,373 +812,60 @@ void sextans(
 		alpha_u,
 		beta_u,
 		edge_list_ptr,
-		fifo_edge_list_ptr_pe0
-		);
+		fifo_edge_list_ptr_pe
+		)
 
-	read_A<0>(
-		edge_list_ch0,
-		fifo_A_pe0,
-		A_LEN0,
-		N_rdA0
-		);
+	.invoke<tapa::join, NUM_CH_SPARSE>(read_A,
+		edge_list_ch,
+		fifo_A_pe,
+		NUM_A_LEN,
+		P_N
+		)
 
-	read_A<1>(
-		edge_list_ch1,
-		fifo_A_pe1,
-		A_LEN1,
-		N_rdA1
-		);
+	.invoke<tapa::join, NUM_CH_B>(read_B,
+		mat_B_ch,
+		fifo_B_pe_x,
+		K,
+		P_N
+		)
 
-	read_A<2>(
-		edge_list_ch2,
-		fifo_A_pe2,
-		A_LEN2,
-		N_rdA2
-		);
+	.invoke<tapa::join, NUM_CH_SPARSE - 1>(PEG,
+		fifo_edge_list_ptr_pe,
+		fifo_A_pe,
+		fifo_B_pe_x,
+		fifo_edge_list_ptr_pe,
+		fifo_B_pe_x,
+		fifo_C_pe
+		)
 
-	read_A<3>(
-		edge_list_ch3,
-		fifo_A_pe3,
-		A_LEN3,
-		N_rdA3
-		);
+	.invoke(PEG_last,
+		fifo_edge_list_ptr_pe,
+		fifo_A_pe,
+		fifo_B_pe_x,
+		fifo_C_pe
+		)
 
-	read_A<4>(
-		edge_list_ch4,
-		fifo_A_pe4,
-		A_LEN4,
-		N_rdA4
-		);
+	.invoke(C_collect,
+		fifo_C_pe,
+		fifo_C_ch_result
+		)
 
-	read_A<5>(
-		edge_list_ch5,
-		fifo_A_pe5,
-		A_LEN5,
-		N_rdA5
-		);
+	.invoke<tapa::join, NUM_CH_C>(read_C,
+		mat_C_ch_in,
+		fifo_C_read_in,
+		M,
+		P_N
+		)
 
-	read_A<6>(
-		edge_list_ch6,
-		fifo_A_pe6,
-		A_LEN6,
-		N_rdA6
-		);
+	.invoke<tapa::join, NUM_CH_C>(comp_C,
+		fifo_C_read_in,
+		fifo_C_ch_result,
+		fifo_C_ch
+		)
 
-	read_A<7>(
-		edge_list_ch7,
-		fifo_A_pe7,
-		A_LEN7,
-		N_rdA7
-		);
-
-	read_B<0>(
-		mat_B_ch0,
-		fifo_B_pe0_x0,
-		K0,
-		N_rdB0
-		);
-
-	read_B<1>(
-		mat_B_ch1,
-		fifo_B_pe0_x1,
-		K1,
-		N_rdB1
-		);
-
-	read_B<2>(
-		mat_B_ch2,
-		fifo_B_pe0_x2,
-		K2,
-		N_rdB2
-		);
-
-	read_B<3>(
-		mat_B_ch3,
-		fifo_B_pe0_x3,
-		K3,
-		N_rdB3
-		);
-
-	PEG<0>(
-		fifo_edge_list_ptr_pe0,
-		fifo_A_pe0,
-		fifo_B_pe0_x0,
-		fifo_B_pe0_x1,
-		fifo_B_pe0_x2,
-		fifo_B_pe0_x3,
-		fifo_edge_list_ptr_pe1,
-		fifo_B_pe1_x0,
-		fifo_B_pe1_x1,
-		fifo_B_pe1_x2,
-		fifo_B_pe1_x3,
-		fifo_C_pe0
-		);
-
-	PEG<1>(
-		fifo_edge_list_ptr_pe1,
-		fifo_A_pe1,
-		fifo_B_pe1_x0,
-		fifo_B_pe1_x1,
-		fifo_B_pe1_x2,
-		fifo_B_pe1_x3,
-		fifo_edge_list_ptr_pe2,
-		fifo_B_pe2_x0,
-		fifo_B_pe2_x1,
-		fifo_B_pe2_x2,
-		fifo_B_pe2_x3,
-		fifo_C_pe1
-		);
-
-	PEG<2>(
-		fifo_edge_list_ptr_pe2,
-		fifo_A_pe2,
-		fifo_B_pe2_x0,
-		fifo_B_pe2_x1,
-		fifo_B_pe2_x2,
-		fifo_B_pe2_x3,
-		fifo_edge_list_ptr_pe3,
-		fifo_B_pe3_x0,
-		fifo_B_pe3_x1,
-		fifo_B_pe3_x2,
-		fifo_B_pe3_x3,
-		fifo_C_pe2
-		);
-
-	PEG<3>(
-		fifo_edge_list_ptr_pe3,
-		fifo_A_pe3,
-		fifo_B_pe3_x0,
-		fifo_B_pe3_x1,
-		fifo_B_pe3_x2,
-		fifo_B_pe3_x3,
-		fifo_edge_list_ptr_pe4,
-		fifo_B_pe4_x0,
-		fifo_B_pe4_x1,
-		fifo_B_pe4_x2,
-		fifo_B_pe4_x3,
-		fifo_C_pe3
-		);
-
-	PEG<4>(
-		fifo_edge_list_ptr_pe4,
-		fifo_A_pe4,
-		fifo_B_pe4_x0,
-		fifo_B_pe4_x1,
-		fifo_B_pe4_x2,
-		fifo_B_pe4_x3,
-		fifo_edge_list_ptr_pe5,
-		fifo_B_pe5_x0,
-		fifo_B_pe5_x1,
-		fifo_B_pe5_x2,
-		fifo_B_pe5_x3,
-		fifo_C_pe4
-		);
-
-	PEG<5>(
-		fifo_edge_list_ptr_pe5,
-		fifo_A_pe5,
-		fifo_B_pe5_x0,
-		fifo_B_pe5_x1,
-		fifo_B_pe5_x2,
-		fifo_B_pe5_x3,
-		fifo_edge_list_ptr_pe6,
-		fifo_B_pe6_x0,
-		fifo_B_pe6_x1,
-		fifo_B_pe6_x2,
-		fifo_B_pe6_x3,
-		fifo_C_pe5
-		);
-
-	PEG<6>(
-		fifo_edge_list_ptr_pe6,
-		fifo_A_pe6,
-		fifo_B_pe6_x0,
-		fifo_B_pe6_x1,
-		fifo_B_pe6_x2,
-		fifo_B_pe6_x3,
-		fifo_edge_list_ptr_pe7,
-		fifo_B_pe7_x0,
-		fifo_B_pe7_x1,
-		fifo_B_pe7_x2,
-		fifo_B_pe7_x3,
-		fifo_C_pe6
-		);
-
-	PEG_last<7>(
-		fifo_edge_list_ptr_pe7,
-		fifo_A_pe7,
-		fifo_B_pe7_x0,
-		fifo_B_pe7_x1,
-		fifo_B_pe7_x2,
-		fifo_B_pe7_x3,
-		fifo_C_pe7
-		);
-
-    C_collect<0>(
-		fifo_C_pe0,
-		fifo_C_pe1,
-		fifo_C_pe2,
-		fifo_C_pe3,
-		fifo_C_pe4,
-		fifo_C_pe5,
-		fifo_C_pe6,
-		fifo_C_pe7,
-
-		fifo_C_ch0_result,
-		fifo_C_ch1_result,
-		fifo_C_ch2_result,
-		fifo_C_ch3_result,
-		fifo_C_ch4_result,
-		fifo_C_ch5_result,
-		fifo_C_ch6_result,
-		fifo_C_ch7_result
-		);
-
-	read_C<0>(
-		mat_C_ch0_in,
-		fifo_C_read_in0,
-		M_rdC0,
-		N_rdC0
-		);
-
-	read_C<1>(
-		mat_C_ch1_in,
-		fifo_C_read_in1,
-		M_rdC1,
-		N_rdC1
-		);
-
-	read_C<2>(
-		mat_C_ch2_in,
-		fifo_C_read_in2,
-		M_rdC2,
-		N_rdC2
-		);
-
-	read_C<3>(
-		mat_C_ch3_in,
-		fifo_C_read_in3,
-		M_rdC3,
-		N_rdC3
-		);
-
-	read_C<4>(
-		mat_C_ch4_in,
-		fifo_C_read_in4,
-		M_rdC4,
-		N_rdC4
-		);
-
-	read_C<5>(
-		mat_C_ch5_in,
-		fifo_C_read_in5,
-		M_rdC5,
-		N_rdC5
-		);
-
-	read_C<6>(
-		mat_C_ch6_in,
-		fifo_C_read_in6,
-		M_rdC6,
-		N_rdC6
-		);
-
-	read_C<7>(
-		mat_C_ch7_in,
-		fifo_C_read_in7,
-		M_rdC7,
-		N_rdC7
-		);
-
-	comp_C<0>(
-		fifo_C_read_in0,
-		fifo_C_ch0_result,
-		fifo_C_ch0
-		);
-
-	comp_C<1>(
-		fifo_C_read_in1,
-		fifo_C_ch1_result,
-		fifo_C_ch1
-		);
-
-	comp_C<2>(
-		fifo_C_read_in2,
-		fifo_C_ch2_result,
-		fifo_C_ch2
-		);
-
-	comp_C<3>(
-		fifo_C_read_in3,
-		fifo_C_ch3_result,
-		fifo_C_ch3
-		);
-
-	comp_C<4>(
-		fifo_C_read_in4,
-		fifo_C_ch4_result,
-		fifo_C_ch4
-		);
-
-	comp_C<5>(
-		fifo_C_read_in5,
-		fifo_C_ch5_result,
-		fifo_C_ch5
-		);
-
-	comp_C<6>(
-		fifo_C_read_in6,
-		fifo_C_ch6_result,
-		fifo_C_ch6
-		);
-
-	comp_C<7>(
-		fifo_C_read_in7,
-		fifo_C_ch7_result,
-		fifo_C_ch7
-		);
-
-	write_C<0>(
-		fifo_C_ch0,
-		mat_C_ch0
-		);
-
-	write_C<1>(
-		fifo_C_ch1,
-		mat_C_ch1
-		);
-
-	write_C<2>(
-		fifo_C_ch2,
-		mat_C_ch2
-		);
-
-	write_C<3>(
-		fifo_C_ch3,
-		mat_C_ch3
-		);
-
-	write_C<4>(
-		fifo_C_ch4,
-		mat_C_ch4
-		);
-
-	write_C<5>(
-		fifo_C_ch5,
-		mat_C_ch5
-		);
-
-	write_C<6>(
-		fifo_C_ch6,
-		mat_C_ch6
-		);
-
-	write_C<7>(
-		fifo_C_ch7,
-		mat_C_ch7
-		);
+	.invoke<tapa::join, NUM_CH_C>(write_C,
+		fifo_C_ch,
+		mat_C_ch
+		)
+	;
 }
-
-#ifndef HLS
-} // end of extern C
-#endif
