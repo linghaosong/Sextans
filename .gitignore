@@ -1,9 +1,0 @@
-*.mtx
-/_x.*
-/.vscode
-/.Xil
-/*.log
-/*.tapa
-/build
-/build_dir.*
-/host
