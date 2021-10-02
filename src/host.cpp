@@ -141,10 +141,8 @@ int main(int argc, char **argv) {
     cout << "Generating dense matirx C ...";
     for (int nn = 0; nn < N; ++nn) {
         for (int mm = 0; mm < M; ++mm) {
-            mat_C_cpu[mm + M * nn] = 1.0 * (mm + 1) * (nn + 1) / M / N;
-            
-            //mat_C_fpga_in[nn % 8].resize(mm+1);
-            //mat_C_fpga_in[nn % 8][mm] = mat_C_cpu[mm + M * nn];
+            mat_C_cpu[mm + M * nn] = 1.0 * (mm + 1) * (nn + 1);
+            mat_C_fpga_in[nn % 8][mm] = mat_C_cpu[mm + M * nn];
         }
     }
     
