@@ -493,6 +493,9 @@ int main(int argc, char **argv) {
     for ( int i = 0; i < NUM_CH_B; i++) {
         OCL_CHECK(err, err = q.enqueueMigrateMemObjects({buffer_B[i]}, 0 /* 0 means from host*/));
     }
+    for ( int i = 0; i < NUM_CH_C; i++) {
+        OCL_CHECK(err, err = q.enqueueMigrateMemObjects({buffer_C_in[i]}, 0 /* 0 means from host*/));
+    }
     OCL_CHECK(err, err = q.enqueueMigrateMemObjects({buffer_edge_list_ptr}, 0 /* 0 means from host*/));
 
     q.finish();
