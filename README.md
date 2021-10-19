@@ -2,8 +2,9 @@
 
 Sextans is an accelerator for general-purpose Sparse-Matrix Dense-Matrix Multiplication (SpMM). One exciting feature is that we only need to prototype Sextans once, and the hardware supports an arbitrary SpMM. Following are software and hardware dependencies.
 
++ Xilinx Vitis 2020.2
 + Alveo U280 HBM FPGA
-+ Xilinx Vitis 2019.2
++ Alveo U250 FPGA
 
 To learn more about the techinqual details, please see [this link](https://arxiv.org/abs/2109.11081).
 
