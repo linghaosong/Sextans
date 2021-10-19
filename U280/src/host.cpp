@@ -60,7 +60,6 @@ int ceil_eightx(int x) {
     return ((x + 7) / 8) * 8;
 }
 
-
 int main(int argc, char **argv) {
     printf("start host\n");
 
@@ -69,22 +68,22 @@ int main(int argc, char **argv) {
     float ALPHA = 0.85;
     float BETA = -2.06;
     
-    int rp_time = 0;
+    int rp_time = 20;
 
-    if (argc == 6) {
-        ALPHA = atof(argv[4]);
-        BETA = atof(argv[5]);
-    }
-    else if (argc == 5) {
-        rp_time = atoi(argv[4]);
-    }
-    else if (argc != 4) {
-        cout << "Usage: " << argv[0] << " <XCLBIN File> [matrix A file] [N] [rp_time] [alpha] [beta]" << std::endl;
+    if (argc != 8) {
+        cout << "Usage: " << argv[0] << " <XCLBIN File> [matrix A file] [outputfile] [ID] [rows] [cols] [nnz]" << std::endl;
         return EXIT_FAILURE;
     }
     
     char * filename_A = argv[2];
-    int N = ceil_eightx(atoi(argv[3]));
+    int N = 512; //floor_eightx(atoi(argv[3]));
+    char * filename_output = argv[3];
+    FILE *fout = fopen(filename_output, "a");
+    
+    int s_ID = atoi(argv[4]);
+    int s_M = atoi(argv[5]);
+    int s_K = atoi(argv[6]);
+    int s_NNZ = atoi(argv[7]);
     
     cout << "N = " << N <<  "\n";
     cout << "alpha = "  << ALPHA << "\n";
@@ -142,6 +141,9 @@ int main(int argc, char **argv) {
     for (int nn = 0; nn < N; ++nn) {
         for (int mm = 0; mm < M; ++mm) {
             mat_C_cpu[mm + M * nn] = 1.0 * (mm + 1) * (nn + 1);
+            
+            //mat_C_fpga_in[nn % 8].resize(mm+1);
+            //mat_C_fpga_in[nn % 8][mm] = mat_C_cpu[mm + M * nn];
         }
     }
     
@@ -266,8 +268,6 @@ int main(int argc, char **argv) {
         }
     }
     
-    
-    
     cout << "Preparing dense C for FPGA ...";
     vector<vector<float, aligned_allocator<float> > > mat_C_fpga_in(8);
     int mat_C_fpga_in_column_size = ((M + 16 - 1) / 16) * 16;
@@ -286,30 +286,11 @@ int main(int argc, char **argv) {
         }
     }
     
-    
-#ifdef DEBUG_PRINT
-    cout << "\n ############## DEBUG PRINT ################# \n";
-    cout << "mat_B_fpga_vec = " << endl;
-    for (int cc = 0; cc < NUM_CH_B; ++cc) {
-        cout << "Channe cc = " << cc << endl;
-        for (int kk = 0; kk < K; ++kk) {
-            cout << "i = " << kk << "， v = " << mat_B_fpga_vec[cc][kk] << endl;
-        }
-    }
-    cout << endl;
-#endif
-    
     vector<vector<float, aligned_allocator<float> > > mat_C_fpga_vec(NUM_CH_C);
     //int mat_C_fpga_column_size = ((M * N + 16 * NUM_CH_C - 1) / (16 * NUM_CH_C)) * 16 * NUM_CH_C;
     int mat_C_fpga_column_size = ((M + 16 - 1) / 16) * 16;
     int mat_C_fpga_chunk_size = ((mat_C_fpga_column_size * (N / 8) + 1023)/1024) * 1024;
-
-#ifdef DEBUG_PRINT
-    cout << "\n ############## DEBUG PRINT ################# \n";
-    cout << "mat_C_fpga_column_size = " << mat_C_fpga_column_size << endl;
-    cout << "mat_C_fpga_chunk_size = " << mat_C_fpga_chunk_size << endl;
-    cout << endl;
-#endif
+    
     
     for (int cc = 0; cc < NUM_CH_C; ++cc) {
         mat_C_fpga_vec[cc] = vector<float, aligned_allocator<float>> (mat_C_fpga_chunk_size, 0.0);
@@ -403,8 +384,7 @@ int main(int argc, char **argv) {
              );
         buffer_B.push_back(std::move(currA));
     }
-    
-    
+
     for (int i = 0; i < NUM_CH_C; i++) {
         OCL_CHECK(err,
                   cl::Buffer currA(context,
@@ -416,7 +396,6 @@ int main(int argc, char **argv) {
         buffer_C_in.push_back(std::move(currA));
     }
     
-
     for (int i = 0; i < NUM_CH_C; i++) {
         OCL_CHECK(err,
                   cl::Buffer currA(context,
@@ -468,7 +447,8 @@ int main(int argc, char **argv) {
 
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, M));
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, K));
-    int para_N = (rp_time << 16) | N;
+    int N_parameter_pos = parameter_pos;
+    int para_N = (20 << 16) | N;
     //int para_N = N;
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, para_N));
     
@@ -481,9 +461,9 @@ int main(int argc, char **argv) {
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, beta_int));
     
 
-    int launch_num = 1;
+    int launch_num = 4;
 
-    cout << "move data to HBM\n";
+    cout << "move data to DRAM\n";
     for ( int i = 0; i < NUM_CH_SPARSE; i++) {
         OCL_CHECK(err, err = q.enqueueMigrateMemObjects({buffer_A[i]}, 0 /* 0 means from host*/));
     }
@@ -497,18 +477,68 @@ int main(int argc, char **argv) {
 
     q.finish();
 
-    cout << "launch kernel\n";
-    auto start = std::chrono::steady_clock::now();
-    // Launch the Kernel
+    printf("start kernel\nWarmup run...\n");
+    N = 8;
+    para_N = (20 << 16) | N;
+    OCL_CHECK(err, err = krnl_sextans.setArg(N_parameter_pos, para_N));
     for (int i = 0; i < launch_num; i++) {
         OCL_CHECK(err, err = q.enqueueTask(krnl_sextans));
     }
     q.finish();
+    
+    string matrix_name = string(argv[2]);
+    int pos_dot = matrix_name.length() - 1;
+    while (matrix_name[pos_dot] != '.') {pos_dot--;}
+    int pos_dash = pos_dot;
+    while (matrix_name[pos_dash] != '/') {pos_dash--;}
+    matrix_name = matrix_name.substr(pos_dash+1, pos_dot - pos_dash - 1);
 
-    auto end = std::chrono::steady_clock::now();
-    double time_taken = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-    time_taken *= 1e-9;
-    printf("Kernel time is %f ms\n", time_taken*1000/launch_num);
+    for (N = 8; N <= 512; N = N * 2) {
+        para_N = (rp_time << 16) | N;
+        OCL_CHECK(err, err = krnl_sextans.setArg(N_parameter_pos, para_N));
+        cout << "Running FPGA kernel N = " << N << ", rp_time = " << rp_time << endl;
+
+            auto start = std::chrono::steady_clock::now();
+            // Launch the Kernel
+            for (int i = 0; i < launch_num; i++) {
+                OCL_CHECK(err, err = q.enqueueTask(krnl_sextans));
+            }
+            q.finish();
+
+            auto end = std::chrono::steady_clock::now();
+            double time_taken = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+            time_taken *= 1e-9;
+        
+        printf("Kernel time is %.7e ms\n", time_taken*1000/launch_num/rp_time);
+
+            //fprintf(fout, "%d\t%f\t%f\t%f\n", N, time_taken * 1000 / launch_time, gflops, bw);
+
+            float gflops =
+                (2.0f * (s_NNZ + s_M) * N)
+                * launch_num // number of iterations of kernel launch
+            * rp_time
+                / 1e9 // convert to GB
+                / time_taken // total time in second
+                ;
+            printf("GFLOPS:%f \n", gflops);
+
+            float bw = 4.0 *
+                (sparse_A_fpga_column_size * NUM_CH_SPARSE * 2.0 +
+                 edge_list_ptr_fpga_size +
+                 mat_B_fpga_column_size * NUM_CH_B +
+                 mat_C_fpga_column_size * NUM_CH_C +
+                 mat_C_fpga_column_size * NUM_CH_C
+                 )
+                * (N / 8)
+                * launch_num // number of iterations of kernel launch
+            * rp_time
+                / 1e9 // convert to GB
+                / time_taken // total time in second
+                ;
+            printf("BW:%f GB/s\n", bw);
+            fprintf(fout, "%d\t%s\t%d\t%d\t%d\t%d\t%.7e\t%f\n", s_ID, matrix_name.c_str(), s_M, s_K, s_NNZ, N, time_taken * 1000 / launch_num / rp_time, gflops);
+    }
+    N = 512;
 
     cout << "move data to host\n";
     // Copy Result from Device Global Memory to Host Local Memory
@@ -517,16 +547,6 @@ int main(int argc, char **argv) {
     }
     q.finish();
     cout << "finish\n";
-
-    
-
-    float gflops =
-        (2.0f * nnz * N)
-        * launch_num // number of iterations of kernel launch
-        / 1e9 // convert to GB
-        / time_taken // total time in second
-        ;
-    printf("GFLOPS:%f \n", gflops);
 
     int mismatch_cnt = 0;
         
@@ -543,6 +563,9 @@ int main(int argc, char **argv) {
             }
         }
     }
+    
+    fprintf(fout, "%d\t%s\t%d\t%d\t%d\t%d\t%d\t%f\n", s_ID, matrix_name.c_str(), -1, -1, -1, mismatch_cnt, M * N, 100.0 * mismatch_cnt / M / N);
+        fclose(fout);
         
     float diffpercent = 100.0 * mismatch_cnt / M / N;
     bool pass = diffpercent < 2.0;
@@ -556,3 +579,8 @@ int main(int argc, char **argv) {
 
     return EXIT_SUCCESS;
 }
+
+
+
+
+
