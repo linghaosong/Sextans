@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
     
     vector<vector<unsigned long, aligned_allocator<unsigned long> > > sparse_A_fpga_vec(NUM_CH_SPARSE);
     int sparse_A_fpga_column_size = 8 * edge_list_ptr[edge_list_ptr.size()-1] * 4 / 4;
-    int sparse_A_fpga_chunk_size = ((sparse_A_fpga_column_size + 511)/512) * 512;
+    //int sparse_A_fpga_chunk_size = ((sparse_A_fpga_column_size + 511)/512) * 512;
     
     edge_list_64bit(edge_list_pes,
                     edge_list_ptr,
@@ -425,7 +425,6 @@ int main(int argc, char **argv) {
     
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, M));
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, K));
-    int N_parameter_pos = parameter_pos;
     int para_N = (rp_time << 16) | N;
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, para_N));
     
