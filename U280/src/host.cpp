@@ -72,13 +72,13 @@ int main(int argc, char **argv) {
     int N = 512;
     
     if (argc == 4) {
-        N = floor_eightx(atoi(argv[3]));
+        N = ceil_eightx(atoi(argv[3]));
     } else if (argc == 6) {
-        N = floor_eightx(atoi(argv[3]));
+        N = ceil_eightx(atoi(argv[3]));
         ALPHA = atof(argv[4]);
         BETA = atof(argv[5]);
     } else if (argc == 7) {
-        N = floor_eightx(atoi(argv[3]));
+        N = ceil_eightx(atoi(argv[3]));
         ALPHA = atof(argv[4]);
         BETA = atof(argv[5]);
         rp_time = atoi(argv[6]);
