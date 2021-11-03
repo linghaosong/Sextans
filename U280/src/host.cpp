@@ -426,8 +426,7 @@ int main(int argc, char **argv) {
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, M));
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, K));
     int N_parameter_pos = parameter_pos;
-    int para_N = (20 << 16) | N;
-    //int para_N = N;
+    int para_N = (rp_time << 16) | N;
     OCL_CHECK(err, err = krnl_sextans.setArg(parameter_pos++, para_N));
     
     unsigned int * tmpPointer_v;
@@ -453,8 +452,6 @@ int main(int argc, char **argv) {
     q.finish();
     
     int launch_num = 1;
-    para_N = (rp_time << 16) | N;
-    OCL_CHECK(err, err = krnl_sextans.setArg(N_parameter_pos, para_N));
     
     printf("start kernel\n");
     auto start = std::chrono::steady_clock::now();
