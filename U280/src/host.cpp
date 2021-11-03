@@ -452,11 +452,28 @@ int main(int argc, char **argv) {
     
     q.finish();
     
-    printf("start kernel\n");
+    int launch_num = 1;
     para_N = (rp_time << 16) | N;
     OCL_CHECK(err, err = krnl_sextans.setArg(N_parameter_pos, para_N));
+    
+    printf("start kernel\n");
+    auto start = std::chrono::steady_clock::now();
     OCL_CHECK(err, err = q.enqueueTask(krnl_sextans));
     q.finish();
+    auto end = std::chrono::steady_clock::now();
+    double time_taken = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    time_taken *= 1e-9;
+    
+    printf("Kernel time is %.7e ms\n", time_taken*1000/launch_num/rp_time);
+    
+    float gflops =
+        (2.0f * (nnz + M) * N)
+        * launch_num // number of iterations of kernel launch
+        * rp_time
+        / 1e9 // convert to GB
+        / time_taken // total time in second
+        ;
+    printf("GFLOPS:%f \n", gflops);
     
     cout << "move data to host\n";
     // Copy Result from Device Global Memory to Host Local Memory
