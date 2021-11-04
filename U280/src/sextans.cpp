@@ -27,14 +27,14 @@ T HLS_REG(T in) {
 
 float uint32_to_float(ap_uint<32> u) {
 #pragma HLS inline
-#pragma HLS pipeline II=1
+//#pragma HLS pipeline II=1
 	float * tmpPointer_v = (float*) & u;
 	return (*tmpPointer_v);
 }
 
 ap_uint<32> float_to_uint32(float u) {
 #pragma HLS inline
-#pragma HLS pipeline II=1
+//#pragma HLS pipeline II=1
 	ap_uint<32> * tmpPointer_v = (ap_uint<32>*) & u;
 	return (*tmpPointer_v);
 }
