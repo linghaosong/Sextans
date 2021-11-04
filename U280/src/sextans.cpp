@@ -249,7 +249,7 @@ void peg16mult(
 	ap_uint<512> & mult512
 	) {
 #pragma HLS inline
-#pragma HLS pipeline II=1
+//#pragma HLS pipeline II=1
 		float alpha_f = uint32_to_float(alpha_u);
 		ap_uint<512> c_out;
 
