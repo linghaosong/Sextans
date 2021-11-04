@@ -254,7 +254,7 @@ void peg16mult(
 		ap_uint<512> c_out;
 
 		float op_a[16];
-#pragma HLS array_partition variable=op_ab complete
+#pragma HLS array_partition variable=op_a complete
 		float op_result[16];
 #pragma HLS array_partition variable=op_result complete
 
