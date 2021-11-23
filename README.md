@@ -11,9 +11,9 @@ To learn more about the techinqual details, please see [this link](https://arxiv
 
 If you find this code useful, please cite:
 
-    @misc{sextans2021,
+    @inproceedings{song2022sextans,
     Author = {Linghao Song and Yuze Chi and Atefeh Sohrabizadeh and Young-kyu Choi and Jason Lau and Jason Cong},
     Title = {Sextans: A Streaming Accelerator for General-Purpose Sparse-Matrix Dense-Matrix Multiplication},
-    Year = {2021},
-    Eprint = {arXiv:2109.11081},
+    booktitle={The 2022 ACM/SIGDA International Symposium on Field-Programmable Gate Arrays},
+    Year = {2022}
     }
