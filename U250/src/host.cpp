@@ -77,14 +77,8 @@ int main(int argc, char **argv) {
         N = ceil_eightx(atoi(argv[3]));
         ALPHA = atof(argv[4]);
         BETA = atof(argv[5]);
-    } else if (argc == 7) {
-        N = ceil_eightx(atoi(argv[3]));
-        ALPHA = atof(argv[4]);
-        BETA = atof(argv[5]);
-        rp_time = atoi(argv[6]);
-    }
-    else {
-        cout << "Usage: " << argv[0] << " <XCLBIN File> [matrix A file] [N] [ALPHA] [BETA] [rp_time]" << std::endl;
+    } else {
+        cout << "Usage: " << argv[0] << " <XCLBIN File> [matrix A file] [N] [ALPHA] [BETA]" << std::endl;
         return EXIT_FAILURE;
     }
     
