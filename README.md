@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/408609900.svg)](https://zenodo.org/badge/latestdoi/408609900)
 # Sextans
 
 Sextans is an accelerator for general-purpose Sparse-Matrix Dense-Matrix Multiplication (SpMM). One exciting feature is that we only need to prototype Sextans once, and the hardware supports an arbitrary SpMM. Following are software and hardware dependencies.
