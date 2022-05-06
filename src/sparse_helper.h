@@ -351,7 +351,7 @@ void generate_edge_list_for_all_PEs(
     const int NUM_COLUMN,
     const int WINDOE_SIZE,
     vector<vector<edge> > & edge_list_pes,
-    vector<unsigned int> & edge_list_ptr,
+    vector<int> & edge_list_ptr,
     const int DEP_DIST_LOAD_STORE = 10) {
     /* -------------------------- */
     
@@ -405,15 +405,15 @@ void generate_edge_list_for_all_PEs(
 
 void edge_list_64bit(
     const vector<vector<edge> > & edge_list_pes,
-    const vector<unsigned int> & edge_list_ptr,
-    vector<vector<unsigned long, aligned_allocator<unsigned long> > > & sparse_A_fpga_vec,
+    const vector<int> & edge_list_ptr,
+    vector<vector<unsigned long, tapa::aligned_allocator<unsigned long> > > & sparse_A_fpga_vec,
     const int NUM_CH_SPARSE = 8) {
     
     int sparse_A_fpga_column_size = 8 * edge_list_ptr[edge_list_ptr.size()-1] * 4 / 4;
     int sparse_A_fpga_chunk_size = ((sparse_A_fpga_column_size + 511)/512) * 512;
     
     for (int cc = 0; cc < NUM_CH_SPARSE; ++cc) {
-        sparse_A_fpga_vec[cc] = vector<unsigned long, aligned_allocator<unsigned long>> (sparse_A_fpga_chunk_size, 0);
+        sparse_A_fpga_vec[cc].resize(sparse_A_fpga_chunk_size, 0);
     }
     
     // col(12 bits) + row (20 bits) + value (32 bits)
@@ -449,17 +449,61 @@ void edge_list_64bit(
                 if (NUM_CH_SPARSE * 8 <= 16) {
                     sparse_A_fpga_vec[cc][j + i * 8] = x;
                 } else if (NUM_CH_SPARSE == 8) {
-                    int seg = 16 / NUM_CH_SPARSE;
-                    int seg_idx = (cc * 8 + j) / seg;
-                    int cc_new = seg_idx % NUM_CH_SPARSE;
-                    int j_new = seg * (seg_idx / NUM_CH_SPARSE) + j % seg;
-                    sparse_A_fpga_vec[cc_new][j_new + i * 8] = x;
+                    /*
+                    const int pe_idx = j + cc * 8;
+                    const int pix_m16 = pe_idx % 16;
+                    const int ch_idx = pix_m16 / 2;
+                    const int j_new = pe_idx % 2 + (pe_idx / 16) * 2;
+                    */
+                    const int pe_idx = j + cc * 8;
+                    const int ch_idx = j;
+                    const int idx_in8 = pe_idx / 8;
+                    //const int j_new = (idx_in8 % 4) * 2 + idx_in8 / 4; // (0,4), (1,5), (2,6), (3,7)
+                    const int j_new = ((idx_in8 & 0x1) > 0) * 4 + ((idx_in8 & 0x2) > 0) * 2 + ((idx_in8 & 0x4) > 0) * 1; // (0,4), (2,6), (1,5), (3,7)
+                    
+                    sparse_A_fpga_vec[ch_idx][j_new + i * 8] = x;
                 } else if (NUM_CH_SPARSE == 4) {
                     int pe_idx = j + cc * 8;
                     sparse_A_fpga_vec[(pe_idx / 4) % 4][pe_idx % 4 + (pe_idx / 16) * 4 + i * 8] = x;
                 }
                 /* change 07-07-2021 END*/
             }
+        }
+    }
+}
+
+void CSC_2_CSR(int M,
+               int K,
+               int NNZ,
+               const vector<int> & csc_col_Ptr,
+               const vector<int> & csc_row_Index,
+               const vector<float> & cscVal,
+               vector<int> & csr_row_Ptr,
+               vector<int> & csr_col_Index,
+               vector<float> & csrVal) {
+    csr_row_Ptr.resize(M + 1, 0);
+    csrVal.resize(NNZ, 0.0);
+    csr_col_Index.resize(NNZ, 0);
+    
+    for (int i = 0; i < NNZ; ++i) {
+        csr_row_Ptr[csc_row_Index[i] + 1]++;
+    }
+    
+    for (int i = 0; i < M; ++i) {
+        csr_row_Ptr[i + 1] += csr_row_Ptr[i];
+    }
+    
+    vector<int> row_nz(M, 0);
+    for (int i = 0; i < K; ++i) {
+        for (int j = csc_col_Ptr[i]; j < csc_col_Ptr[i + 1]; ++j) {
+            int r = csc_row_Index[j];
+            int c = i;
+            float v = cscVal[j];
+            
+            int pos = csr_row_Ptr[r] + row_nz[r];
+            csrVal[pos] = v;
+            csr_col_Index[pos] = c;
+            row_nz[r]++;
         }
     }
 }
