@@ -30,8 +30,6 @@ add_tapa_target(
 
 add_xocc_hw_link_targets(
   ${CMAKE_CURRENT_BINARY_DIR}
-  --optimize 3
-  --save-temps
   --config=${CMAKE_CURRENT_SOURCE_DIR}/link_config.ini
   --vivado.prop run.impl_1.STEPS.PHYS_OPT_DESIGN.is_enabled=1
   --vivado.prop run.impl_1.STEPS.OPT_DESIGN.ARGS.DIRECTIVE=Explore
