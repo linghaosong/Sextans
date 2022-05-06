@@ -45,7 +45,7 @@ add_xocc_hw_link_targets(
 
 add_custom_target(
   swsim
-  COMMAND $<TARGET_FILE:sextans> /home/slh/suitesparse/rgg010/rgg010.mtx 16
+  COMMAND $<TARGET_FILE:sextans> ../matrices/nasa4704/nasa4704.mtx 16
   DEPENDS sextans
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(
