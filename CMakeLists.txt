@@ -6,6 +6,8 @@ set(PLATFORM
     xilinx_u280_xdma_201920_3
     CACHE STRING "Target FPGA platform")
 
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wno-write-strings")
+
 find_package(TAPA REQUIRED)
 find_package(SDx REQUIRED)
 
@@ -20,12 +22,13 @@ add_tapa_target(
   TOP Sextans
   CONNECTIVITY ${CMAKE_CURRENT_SOURCE_DIR}/link_config.ini
   CONSTRAINT ${CMAKE_CURRENT_BINARY_DIR}/constraint.tcl
+  --enable-hbm-binding-adjustment
   --read-only-args edge_list_ptr
   --read-only-args edge_list_ch*
   --read-only-args mat_B_ch*
   --read-only-args mat_C_ch_in*
   --write-only-args mat_C_ch*
-  --floorplan-opt-priority SLR_CROSSING_PRIORITIZED
+  --max-slr-width-limit 11000
   PLATFORM ${PLATFORM})
 
 add_xocc_hw_link_targets(
@@ -54,7 +57,8 @@ add_custom_target(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(
   hw
+  COMMAND sh ${CMAKE_CURRENT_BINARY_DIR}/Sextans.xilinx_u280_xdma_201920_3.hw_generate_bitstream.sh
   COMMAND TAPAB=$<TARGET_PROPERTY:${hw_xclbin},FILE_NAME> $<TARGET_FILE:sextans>
           ../matrices/nasa4704/nasa4704.mtx 16
-  DEPENDS sextans ${hw_xclbin}
+  DEPENDS sextans hls
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
