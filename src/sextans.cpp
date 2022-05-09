@@ -215,8 +215,8 @@ cc:
 #pragma HLS pipeline II=1
         bool flag_nop = fifo_in0.empty() | fifo_in1.empty();
         if (!flag_nop) {
-            float_v16 tmp0 = fifo_in0.read();
-            float_v16 tmp1 = fifo_in1.read();
+            float_v16 tmp0; fifo_in0.try_read(tmp0);
+            float_v16 tmp1; fifo_in1.try_read(tmp1);
             float_v16 c_out = tmp0 + tmp1;
             fifo_out.write(c_out);
         }
@@ -356,8 +356,8 @@ l_rp:
                 if (b_2048_ready & b_2048_out_not_full) {
                     float_v16 b_512_x[NUM_CH_B];
                     for (int k = 0; k < NUM_CH_B; ++k) {
-                        b_512_x[k] = fifo_B_in[k].read();
-                        fifo_B_out[k].write(b_512_x[k]);
+                        fifo_B_in[k].try_read(b_512_x[k]);
+                        fifo_B_out[k].try_write(b_512_x[k]);
                     }
                     
                     for (int k = 0; k < 8; ++k) {
@@ -514,7 +514,7 @@ l_rp:
                 
                 if (!nop_flag) {
                     for (int p = 0; p < 4; ++p) {
-                        MultBVec rabv = fifo_aBvec[p].read();
+                        MultBVec rabv; fifo_aBvec[p].try_read(rabv);
                         ap_uint<18> a_row = rabv.row;
                         
                         if (a_row[17] == 0) {
@@ -782,9 +782,9 @@ void Scatter_1_2(tapa::istream<ap_uint<512>> & fifo_in,
             flag_nop |= fifo_out[i].full();
         }
         if (!flag_nop) {
-            ap_uint<512> tmp = fifo_in.read();
+            ap_uint<512> tmp; fifo_in.try_read(tmp);
             for (int i = 0; i < 2; ++i) {
-                fifo_out[i].write(tmp(255 + i * 256, i * 256));
+                fifo_out[i].try_write(tmp(255 + i * 256, i * 256));
             }
         }
     }
@@ -799,13 +799,13 @@ void Merger(tapa::istreams<float_v8, 2> & fifo_in,
             float_v16 tmpv16;
             float_v8 tmpv8[2];
 #pragma HLS aggregate variable=tmpv16
-            tmpv8[0] = fifo_in[0].read();
-            tmpv8[1] = fifo_in[1].read();
+            fifo_in[0].try_read(tmpv8[0]);
+            fifo_in[1].try_read(tmpv8[1]);
             for (int i = 0; i < 8; ++i) {
                 tmpv16[i] = tmpv8[0][i];
                 tmpv16[i + 8] = tmpv8[1][i];
             }
-            fifo_out.write(tmpv16);
+            fifo_out.try_write(tmpv16);
         }
     }
 }
