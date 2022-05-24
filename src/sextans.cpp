@@ -17,19 +17,21 @@ struct MultBVec {
 };
 
 template <typename T, typename R>
-void async_read(tapa::async_mmap<T> & A,
-                tapa::ostream<T> & fifo_A,
-                const R A_len,
-                R & i_req,
-                R & i_resp) {
+inline void async_read(tapa::async_mmap<T> & A,
+                       tapa::ostream<T> & fifo_A,
+                       const R A_len,
+                       R & i_req,
+                       R & i_resp) {
 #pragma HLS inline
-    if (i_req < A_len &&
-        i_req < i_resp + 64 &&
-        A.read_addr.try_write(i_req)) {
+    if ((i_req < A_len) &
+        !A.read_addr.full()) {
+        A.read_addr.try_write(i_req);
         ++i_req;
     }
-    if (!fifo_A.full() && !A.read_data.empty()) {
-        fifo_A.try_write(A.read_data.read(nullptr));
+    if (!fifo_A.full() & !A.read_data.empty()) {
+        T tmp;
+        A.read_data.try_read(tmp);
+        fifo_A.try_write(tmp);
         ++i_resp;
     }
 }
@@ -173,35 +175,42 @@ l_rp:
         for(int i_req = 0, i_resp = 0; i_resp < num_ite_C;) {
 #pragma HLS loop_tripcount min=1 max=500000
 #pragma HLS pipeline II=1
-            if (i_req < num_ite_C &&
-                i_req < i_resp + 64 &&
-                !fifo_C.empty() &&
-                !C_out.write_addr.full() &&
+            if ((i_req < num_ite_C) &
+                !fifo_C.empty() &
+                !C_out.write_addr.full() &
                 !C_out.write_data.full() ) {
                 C_out.write_addr.try_write(i_req);
-                C_out.write_data.try_write(fifo_C.read(nullptr));
+		float_v16 tmpv;
+		fifo_C.try_read(tmpv);
+                C_out.write_data.try_write(tmpv);
                 ++i_req;
             }
-            if (!C_out.write_resp.empty()) {
-                i_resp += ap_uint<9>(C_out.write_resp.read(nullptr)) + 1;
+	    uint8_t n_resp;
+            if (C_out.write_resp.try_read(n_resp)) {
+                i_resp += int(n_resp) + 1;
             }
         }
     }
 }
 
-void FloatvMultConst(const int alpha_u,
+void FloatvMultConst(const int alpha_u, const int M, const int P_N,
             tapa::istream<float_v16> & fifo_in,
             tapa::ostream<float_v16> & fifo_out
             ) {
     const float alpha_f = tapa::bit_cast<float>(alpha_u);
+    const int N16 = P_N >> 16;
+    const int rp_time = (N16 == 0)? 1 : N16;
+    const int N = P_N & 0xFFFF;
+    const int num_ite = ((M + 15) >> 4) * ((N + 7) >> 3) * rp_time;
 cc:
-    for (;;) {
+    for (int i = 0; i < num_ite;) {
 #pragma HLS pipeline II=1
         float_v16 tmp;
         bool read_ready = fifo_in.try_read(tmp);
         if (read_ready) {
             float_v16 c_out = tmp * alpha_f;
             fifo_out.write(c_out);
+	    ++i;
         }
     }
 }
@@ -944,17 +953,21 @@ void Sextans(tapa::mmap<int> edge_list_ptr,
                                       wrC_inst
                                       )
     
-        .invoke<tapa::detach, NUM_CH_C>(FloatvMultConst,
-                                        beta_u,
-                                        fifo_C_read_in,
-                                        fifo_C_read_in_beta
-                                        )
+        .invoke<tapa::join, NUM_CH_C>(FloatvMultConst,
+                                      beta_u, 
+				      M, 
+				      P_N,
+                                      fifo_C_read_in,
+                                      fifo_C_read_in_beta
+                                      )
     
-        .invoke<tapa::detach, NUM_CH_C>(FloatvMultConst,
-                                        alpha_u,
-                                        fifo_C_ch_result,
-                                        fifo_C_ch_result_alpha
-                                        )
+        .invoke<tapa::join, NUM_CH_C>(FloatvMultConst,
+				      alpha_u,
+				      M,
+				      P_N,
+                                      fifo_C_ch_result,
+                                      fifo_C_ch_result_alpha
+                                      )
     
         .invoke<tapa::detach, NUM_CH_C>(FloatvAddFloatv,
                                         fifo_C_ch_result_alpha,
