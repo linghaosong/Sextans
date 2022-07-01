@@ -6,7 +6,46 @@ Sextans is an accelerator for general-purpose Sparse-Matrix Dense-Matrix Multipl
 + TAPA + Autobridge, Gurobi
 + Xilinx Vitis 2021.2
 + Alveo U280 HBM FPGA
-+ Alveo U250 FPGA
+
+Dependencies: 
+1. TAPA + Autobridge
+
++ Following [Install TAPA](https://tapa.readthedocs.io/en/release/installation.html) to install TAPA(Autobridge) and Gurobi.
++ Vitis 2021.2
++ Xilinx xilinx_u280_xdma_201920_3 shell and a Xilinx U280 FPGA card.
+
+### Input matrix format & sample input
+The host code takes martrix market format(https://math.nist.gov/MatrixMarket/formats.html). We test on sparse matrices from SuiteSparse(https://sparse.tamu.edu) collection. We have two example matices under the folder [matrices](https://github.com/linghaosong/Sextans/tree/tapa/matrices)
+    
+## To do software emulation:
+
+    mkdir build
+    cd build
+    cmake ..
+    make swsim
+if you encounter cmake errors, just run the following under build
+
+    g++ -o sextans -Wno-write-strings -Wunused-result -O2 ../src/sextans.cpp ../src/sextans-host.cpp -ltapa -lfrt -lglog -lgflags -lOpenCL 
+To run an example matrix(software emulation), run
+
+    ./sextans ../matrices/nasa4704/nasa4704.mtx 16
+    
+## To run HLS:
+
+    cd build
+    cp ../bitstream/run_tapa.sh ./
+    sh run_tapa.sh
+
+After HLS, a bitstream generator file *Serpens_generate_bitstream.sh* is generated under the build folder. Note that we leverages the DSE optition from Autobridge for better Place and Route. We use run-6 to generate hardware.
+
+## To generate bitstream (hardware):
+
+    sh Serpens_generate_bitstream.sh
+    
+## To run the accelerator on board:
+We provide the generated bitstream. If you have a U280 FPGA ready, you don't need to generate the hwardware again, just run
+
+    TAPAB=../bitstream/Sextans_xilinx_u280_xdma_201920_3.xclbin ./sextans ../matrices/nasa4704/nasa4704.mtx 16
 
 To learn more about the techinqual details, please see [this link](https://arxiv.org/abs/2109.11081).
 
