@@ -36,11 +36,11 @@ To run an example matrix(software emulation), run
     cp ../bitstream/run_tapa.sh ./
     sh run_tapa.sh
 
-After HLS, a bitstream generator file *Serpens_generate_bitstream.sh* is generated under the build folder. Note that we leverages the DSE optition from Autobridge for better Place and Route. We use run-6 to generate hardware.
+After HLS, a bitstream generator file *Sextans_generate_bitstream.sh* is generated under the build folder. Note that we leverages the DSE optition from Autobridge for better Place and Route. We use run-6 to generate hardware.
 
 ## To generate bitstream (hardware):
 
-    sh Serpens_generate_bitstream.sh
+    sh Sextans_generate_bitstream.sh
     
 ## To run the accelerator on board:
 We provide the generated bitstream. If you have a U280 FPGA ready, you don't need to generate the hwardware again, just run
