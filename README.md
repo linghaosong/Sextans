@@ -47,14 +47,15 @@ We provide the generated bitstream. If you have a U280 FPGA ready, you don't nee
 
     TAPAB=../bitstream/Sextans_xilinx_u280_xdma_201920_3.xclbin ./sextans ../matrices/nasa4704/nasa4704.mtx 16
 
-To learn more about the techinqual details, please see [this link](https://arxiv.org/abs/2109.11081).
+To learn more about the techinqual details, please see [this link](https://dl.acm.org/doi/10.1145/3490422.3502357).
 
 
 If you find this code useful, please cite:
 
     @inproceedings{song2022sextans,
-    author = {Linghao Song and Yuze Chi and Atefeh Sohrabizadeh and Young-kyu Choi and Jason Lau and Jason Cong},
-    title = {Sextans: A Streaming Accelerator for General-Purpose Sparse-Matrix Dense-Matrix Multiplication},
-    booktitle={The 2022 ACM/SIGDA International Symposium on Field-Programmable Gate Arrays},
-    year = {2022}
+        author = {Linghao Song and Yuze Chi and Atefeh Sohrabizadeh and Young-kyu Choi and Jason Lau and Jason Cong},
+        title = {Sextans: A Streaming Accelerator for General-Purpose Sparse-Matrix Dense-Matrix Multiplication},
+        booktitle={Proceedings of the 2022 ACM/SIGDA International Symposium on Field-Programmable Gate Arrays},
+        pages={65--77},
+        year = {2022}
     }
